@@ -65,6 +65,7 @@ size_t Dictionary<T>::addItem(T& value, vector<size_t>* vecValue, bool sorted, b
 	if (bulkInsert) bulkVecValue->push_back(value);
 
 	if (items->empty()) {
+		// initial case
 		items->push_back(value);
 		vecValue->push_back(0);
 		(*sMap)[value] = 1;
@@ -81,6 +82,7 @@ size_t Dictionary<T>::addItem(T& value, vector<size_t>* vecValue, bool sorted, b
 		}
 		return vecValue->back();
 	} else {
+		// default will be here
 		// find the lower bound for value in vector
 		typename vector<T>::iterator lower;
 		lower = std::lower_bound(items->begin(), items->end(), value,
@@ -268,20 +270,4 @@ void Dictionary<T>::search(T& value, ColumnBase::OP_TYPE opType, vector<size_t>&
 			}
 		}
 	}
-//	if (opType == ColumnBase::containOp) {
-//		// search by inverted index
-//		struct invertedIndex idxContain;
-//		strTolower(value);	// lower to compare with index
-//		Porter2Stemmer::stem(value); // stem to compare with index
-//		idxContain.word = value;
-//		typename vector<invertedIndex>::iterator lowerIdx;
-//		lowerIdx = std::lower_bound(vecIndexLevel0->begin(), vecIndexLevel0->end(), idxContain);
-//		// found
-//		if (lowerIdx != vecIndexLevel0->end() && *lowerIdx == idxContain) {
-//			invertedIndex idx = vecIndexLevel0->at(lowerIdx - vecIndexLevel0->begin());
-//			result.insert(result.end(), idx.location.begin(), idx.location.end());
-//			// sort result
-//			std::sort(result.begin(), result.end());
-//		}
-//	}
 }

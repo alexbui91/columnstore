@@ -16,7 +16,7 @@ namespace std {
 template<typename T>
 class Column: public ColumnBase{
 private:
-	// value vector for column
+	// value vector for column corresponding to position in items of dictionary
 	vector<size_t>* vecValue;
 	// bit packing array
 	PackedArray* packed;

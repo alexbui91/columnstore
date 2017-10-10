@@ -33,7 +33,7 @@ private:
 			return word == a.word;
 		}
 	};
-
+	// vector to save all unique items of each column
 	vector<T>* items;
 	bool isSorted = false;
 	std::unordered_map<T, size_t>* sMap;
@@ -66,7 +66,6 @@ public:
 	vector<T>* getBulkVecValue() {
 		return bulkVecValue;
 	}
-
 	void clearTemp() {
 		sMap->clear();
 		bulkVecValue->resize(0);
