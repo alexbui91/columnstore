@@ -9,10 +9,14 @@ CPP_SRCS += \
 ../Dictionary.cpp \
 ../main.cpp 
 
+C_SRCS += \
+../PackedArray.c 
+
 OBJS += \
 ./Column.o \
 ./ColumnBase.o \
 ./Dictionary.o \
+./PackedArray.o \
 ./main.o 
 
 CPP_DEPS += \
@@ -21,12 +25,22 @@ CPP_DEPS += \
 ./Dictionary.d \
 ./main.d 
 
+C_DEPS += \
+./PackedArray.d 
+
 
 # Each subdirectory must supply rules for building sources it contributes
 %.o: ../%.cpp
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
 	g++ -O0 -g3 -Wall -c -fmessage-length=0 -std=c++11 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)" -o "$@" "$<"
+	@echo 'Finished building: $<'
+	@echo ' '
+
+%.o: ../%.c
+	@echo 'Building file: $<'
+	@echo 'Invoking: GCC C Compiler'
+	gcc -O0 -g3 -Wall -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 

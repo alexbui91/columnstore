@@ -61,9 +61,9 @@ public:
 	void setIsSorted(bool sorted);
 	bool getIsSorted();
 	void print(int row);
-	void buildInvertedIndex();
+	void search(ColumnBase::OP_TYPE opType, vector<size_t>& result, T& value);
+	void search(ColumnBase::OP_TYPE opType, vector<size_t>& result, T& value, T& value2);
 	void sort();
-	void search(T& value, ColumnBase::OP_TYPE opType, vector<size_t>& result);
 	vector<T>* getBulkVecValue() {
 		return bulkVecValue;
 	}

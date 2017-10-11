@@ -9,8 +9,8 @@
 #define SRC_COLUMN_H_
 
 #include "ColumnBase.h"
-#include "PackedArray.h"
 #include "Dictionary.h"
+#include "PackedArray.h"
 
 namespace std {
 template<typename T>
@@ -39,13 +39,13 @@ public:
 	}
 	vector<size_t>* getVecValue(){
 		// change to bit type
-//		if (vecValue == NULL) {
-//			vecValue = new vector<size_t>();
-//		}
-//		vecValue->clear();
-//		for (int i = 0; i < packed->count; i++) {
-//			vecValue->push_back(PackedArray_get(packed, i));
-//		}
+		if (vecValue == NULL) {
+			vecValue = new vector<size_t>();
+		}
+		vecValue->clear();
+		for (int i = 0; i < packed->count; i++) {
+			vecValue->push_back(PackedArray_get(packed, i));
+		}
 		return vecValue;
 	}
 	PackedArray* getPacked(){
@@ -61,8 +61,59 @@ public:
 		this->bulkInsert = bulkInsert;
 		dictionary->addItem(value, vecValue, sorted, bulkInsert);
 	}
-	void testDict(){
-		dictionary->test();
+
+	//  re-order vecValue after building entire dictionary using bulk insert
+	void rebuildVecValue() {
+		vecValue->resize(0);
+		// sort dictionary
+		dictionary->sort();
+		dictionary->setIsSorted(true);
+		// get bulkVecValue vector
+		vector<T>* bulkVecValue = dictionary->getBulkVecValue();
+		if (bulkVecValue != NULL) {
+			for (size_t i = 0; i < bulkVecValue->size(); i++) {
+				// find position of valueId in dictionary
+				vector<size_t> result;
+				dictionary->search(ColumnBase::equal, result, bulkVecValue->at(i));
+				size_t pos = result[0];
+				if (pos != -1) vecValue->push_back(pos);
+			}
+		}
+		bulkVecValue->resize(0);
+	}
+
+	void processColumn() {
+		if (this->getType() == ColumnBase::intType ||
+				this->getType() == ColumnBase::uIntType ||
+				this->getType() == ColumnBase::llType) {
+			if (this->bulkInsert)
+				this->rebuildVecValue();
+			this->createBitPackingVecValue();
+			this->getDictionary()->clearTemp();
+		}
+	}
+	void createBitPackingVecValue() {
+		size_t numOfBit = (size_t) ceil(log2((double) dictionary->size()));
+		// init bit packing array
+		packed = PackedArray_create(numOfBit, vecValue->size());
+
+		for (size_t i = 0; i < vecValue->size(); i++) {
+			size_t value = vecValue->at(i);
+			PackedArray_set(packed, i, value);
+		}
+		// free space vecValue
+		vecValue->resize(0);
+	}
+
+	size_t lookup_packed(size_t i){
+		return PackedArray_get(packed, i);
+	}
+
+	void printVecValue(int row) {
+		vecValue = getVecValue();
+		for (size_t i = 0; i < (*vecValue).size() && i < row; i++) {
+			cout << "vecValue[" << i << "] = " << (*vecValue)[i] << "\n";
+		}
 	}
 };
 

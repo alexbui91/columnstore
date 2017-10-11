@@ -25,4 +25,3 @@ namespace std {
 		type = localType;
 	}
 }
-
