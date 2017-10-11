@@ -1,0 +1,80 @@
+Memory status before: 1740kb
+Loading time: 7.047s
+Memory consumption after loading: 137640kb
+Dictionary size of sid: 41 with size: 172
+Total row of sid = 40: 1
+Running time of sid = 40: 4.5e-05s
+Dictionary[11] = 40
+Memory consumption after perform sid = 40: 137640kb
+Dictionary size of v : 387008 with size: 1548040
+Total row of V > 5,000,000: 386788
+Running time of V > 5,000,000: 0.016313s
+Dictionary[0] = 1056
+Dictionary[1] = 1251
+Dictionary[2] = 1648
+Dictionary[3] = 1762
+Dictionary[4] = 1837
+Dictionary[5] = 1865
+Dictionary[6] = 1893
+Dictionary[7] = 1949
+Dictionary[8] = 2076
+Dictionary[9] = 2191
+Dictionary[10] = 2223
+Dictionary[11] = 2244
+Dictionary[12] = 2331
+Dictionary[13] = 2393
+Dictionary[14] = 2510
+Dictionary[15] = 2549
+Dictionary[16] = 2592
+Dictionary[17] = 2642
+Dictionary[18] = 2644
+Dictionary[19] = 2681
+Memory consumption after perform V > 5,000,000: 144864kb
+Dictionary size of ts in lossless : 387008 with size: 1548040
+Dictionary size of ts in lossy : 80407 with size: 643264
+Total row of 100e14 < TS < 121e14: 1048576
+Running time of 100e14 < TS < 121e14: 0.023998s
+Dictionary[0] = 10629342490369879
+Dictionary[1] = 10629347605342274
+Dictionary[2] = 10629352720314738
+Dictionary[3] = 10629357835286658
+Dictionary[4] = 10629362950259427
+Dictionary[5] = 10629368065231435
+Dictionary[6] = 10629373180203890
+Dictionary[7] = 10629378295176356
+Dictionary[8] = 10629383410148822
+Dictionary[9] = 10632024809835772
+Dictionary[10] = 10632029737813340
+Dictionary[11] = 10633811911716270
+Dictionary[12] = 10634726820637202
+Dictionary[13] = 10634731737624712
+Dictionary[14] = 10634732514566388
+Dictionary[15] = 10634735140223609
+Dictionary[16] = 10634736654612317
+Dictionary[17] = 10634737426529044
+Dictionary[18] = 10634738740592737
+Dictionary[19] = 10634740108248464
+Memory consumption after perform 100e14 < TS < 100e14: 145964kb
+Total row of 100e14 < TS < 121e14 in lossy dict: 80407
+Running time of 100e14 < TS < 121e14 in lossy dict: 0.001725s
+Dictionary[0] = 10629342
+Dictionary[1] = 10629347
+Dictionary[2] = 10629352
+Dictionary[3] = 10629357
+Dictionary[4] = 10629362
+Dictionary[5] = 10629368
+Dictionary[6] = 10629373
+Dictionary[7] = 10629378
+Dictionary[8] = 10629383
+Dictionary[9] = 10632024
+Dictionary[10] = 10632029
+Dictionary[11] = 10633811
+Dictionary[12] = 10634726
+Dictionary[13] = 10634731
+Dictionary[14] = 10634732
+Dictionary[15] = 10634735
+Dictionary[16] = 10634736
+Dictionary[17] = 10634737
+Dictionary[18] = 10634738
+Dictionary[19] = 10634740
+Memory consumption after perform 100e14 < TS < 100e14 in lossy dict: 145964kb
