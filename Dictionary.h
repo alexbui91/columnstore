@@ -71,6 +71,9 @@ public:
 		sMap->clear();
 		bulkVecValue->resize(0);
 	}
+	int getMemoryConsumption(){
+		return sizeof(items) + (sizeof(T) * this->size());
+	}
 	void test(){
 		cout << "test success";
 	}

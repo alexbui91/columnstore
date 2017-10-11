@@ -59,86 +59,24 @@ int parseLine(char* line){
 }
 
 int getMemory(){ //Note: this value is in KB!
-    FILE* file = fopen("/proc/self/status", "r");
-    int result = -1;
-    char line[128];
+	FILE* file = fopen("/proc/self/status", "r");
+	int result = -1;
+	char line[128];
 
-    while (fgets(line, 128, file) != NULL){
-        if (strncmp(line, "VmSize:", 7) == 0){
-            result = parseLine(line);
-            break;
-        }
-    }
-    fclose(file);
-    return result;
+	while (fgets(line, 128, file) != NULL){
+		if (strncmp(line, "VmRSS:", 6) == 0){
+			result = parseLine(line);
+			break;
+		}
+	}
+	fclose(file);
+	return result;
 }
 
-//vector<vector<string>> save_file_dictionary(string& path, vector<ColumnBase*>& columns){
-//	ifstream infile(path);
-//	if (!infile) {
-//		cout << "Cannot open file: " << path << endl;
-//	}
-//	string line;
-//	string delim = ",";
-//
-//	string name;
-//	size_t t_index = 0;
-//	vector<size_t> result;
-//	string pos;
-//	vector<vector<string>> table;
-//	// load data into corresponding column
-//	while(getline(infile, line)) {
-//		size_t last = 0; size_t next = 0;
-//		// count total column
-//		size_t c_index = 0;
-//		// count selected column
-//		t_index = 0;
-//		vector<string> columns_dict;
-//		while((next = line.find(delim, last)) != string::npos){
-//			result.clear();
-//			string temp_col = line.substr(last, next - last);
-//			if(contain(col_p, c_index)){
-//				ColumnBase* col_b = columns.at(t_index);
-//				switch(col_b->getType()){
-//					case ColumnBase::uIntType:{
-//						Column<unsigned int>* col = (Column<unsigned int>*) col_b;
-//						unsigned int cell = (unsigned int) stoi(temp_col);
-//						col->getDictionary()->search(ColumnBase::equal, result, cell);
-//						break;
-//					}
-//					case ColumnBase::intType:{
-//						Column<int>* col = (Column<int>*) col_b;
-//						int cell = stoi(temp_col);
-//						col->getDictionary()->search(ColumnBase::equal, result, cell);
-//						break;
-//					}
-//					case ColumnBase::llType:{
-//						Column<bigint>* col = (Column<bigint>*) col_b;
-//						bigint cell = stod(temp_col);
-//						col->getDictionary()->search(ColumnBase::equal, result, cell);
-//						break;
-//					}
-//					default:
-//						Column<string>* col = (Column<string>*) col_b;
-//						col->getDictionary()->search(ColumnBase::equal, result, temp_col);
-//						break;
-//				}
-//				if(!result.empty())
-//					pos = to_string(result[0]);
-//				else
-//					pos = "";
-//				columns_dict.push_back(pos);
-//				t_index++;
-//			}else{
-//				columns_dict.push_back(temp_col);
-//			}
-//			table.push_back(columns_dict);
-//			last = next + delim.length();
-//			c_index++;
-//		}
-//	}
-//	infile.close();
-//}
+long to_lossy(string temp_col){
+	return stol(temp_col.substr(0, temp_col.length() / 2));
+}
+
 int main(void){
 	clock_t t1,t2;
 	t1=clock();
@@ -187,6 +125,9 @@ int main(void){
 		columns.push_back(col_b);
 		t_index++;
 	}
+	// init ts lossy col
+	Column<long>* ts_lossy = new Column<long>();
+
 	// load data into corresponding column
 	while(getline(infile, line)) {
 		size_t last = 0; size_t next = 0;
@@ -212,9 +153,14 @@ int main(void){
 						break;
 					}
 					case ColumnBase::llType:{
+						// TS
 						Column<bigint>* col = (Column<bigint>*) col_b;
-						bigint cell = stod(temp_col);
+						bigint cell = stoll(temp_col);
 						col->updateDictionary(cell);
+						if(col->getName() == "ts"){
+							long cell_lossy = to_lossy(temp_col);
+							ts_lossy->updateDictionary(cell_lossy);
+						}
 						break;
 					}
 					default:
@@ -245,6 +191,9 @@ int main(void){
 			case ColumnBase::llType:{
 				Column<bigint>* col3 = (Column<bigint>*) columns.at(i);
 				col3->processColumn();
+				if(col3->getName() == "ts"){
+					ts_lossy->rebuildVecValue();
+				}
 				break;
 			}
 			default:
@@ -265,6 +214,7 @@ int main(void){
 	Column<unsigned int>* col = (Column<unsigned int>*) col_b;
 	unsigned int input = 40U;
 	col->getDictionary()->search(ColumnBase::equal, result, input);
+	cout << "Dictionary size of sid: " << col->getDictionary()->size() << " with size: " << col->getDictionary()->getMemoryConsumption()  << endl;
 	cout << "Total row of sid = 40: " << result.size() << endl;
 	t2 = clock();
 	cout << "Running time of sid = 40: " << ((float)t2-(float)t1) / CLOCKS_PER_SEC  << "s"  << endl;
@@ -279,6 +229,7 @@ int main(void){
 	col = (Column<unsigned int>*) col_b;
 	input = 5000000U;
 	col->getDictionary()->search(ColumnBase::lt, result, input);
+	cout << "Dictionary size of v : " << col->getDictionary()->size() << " with size: " << col->getDictionary()->getMemoryConsumption() << endl;
 	cout << "Total row of V > 5,000,000: " << result.size() << endl;
 	t2 = clock();
 	cout << "Running time of V > 5,000,000: " << ((float)t2-(float)t1) / CLOCKS_PER_SEC  << "s" << endl;
@@ -291,14 +242,29 @@ int main(void){
 	t1 = clock();
 	col_b = columns.at(1);
 	Column<bigint>* ts = (Column<bigint>*) col_b;
-	bigint input1 = 10000000000000000LL;
+	bigint input1 = 1000000000000000LL;
 	bigint input2 = 12100000000000000LL;
+	cout << "Dictionary size of ts in lossless : " << col->getDictionary()->size() << " with size: " << col->getDictionary()->getMemoryConsumption() << endl;
+	cout << "Dictionary size of ts in lossy : " << ts_lossy->getDictionary()->size() << " with size: " << ts_lossy->getDictionary()->getMemoryConsumption() << endl;
 	ts->getDictionary()->search(ColumnBase::range, result, input1, input2);
-	cout << "Total row of 120e14 < TS < 121e14: " << result.size() << endl;
+	cout << "Total row of 100e14 < TS < 121e14: " << result.size() << endl;
 	t2 = clock();
-	cout << "Running time of 120e14 < TS < 121e14: " << ((float)t2-(float)t1) / CLOCKS_PER_SEC  << "s" << endl;
+	cout << "Running time of 100e14 < TS < 121e14: " << ((float)t2-(float)t1) / CLOCKS_PER_SEC  << "s" << endl;
 	output = get_limit(result);
 	print_result(output, ts);
-	cout << "Memory consumption after perform 120e14 < TS < 121e14: " << getMemory() << "kb" << endl;
+	cout << "Memory consumption after perform 100e14 < TS < 100e14: " << getMemory() << "kb" << endl;
+
+	// perform search in lossy
+	result.clear();
+	t1 = clock();
+	long lin1 = to_lossy(to_string(input1));
+	long lint2 = to_lossy(to_string(input2));
+	ts_lossy->getDictionary()->search(ColumnBase::range, result, lin1, lint2);
+	cout << "Total row of 100e14 < TS < 121e14 in lossy dict: " << result.size() << endl;
+	t2 = clock();
+	cout << "Running time of 100e14 < TS < 121e14 in lossy dict: " << ((float)t2-(float)t1) / CLOCKS_PER_SEC  << "s" << endl;
+	output = get_limit(result);
+	print_result(output, ts_lossy);
+	cout << "Memory consumption after perform 100e14 < TS < 100e14 in lossy dict: " << getMemory() << "kb" << endl;
 	return 0;
 }

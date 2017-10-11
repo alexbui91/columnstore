@@ -421,3 +421,4 @@ template class Dictionary<string>;
 template class Dictionary<bigint>;
 template class Dictionary<unsigned int>;
 template class Dictionary<int>;
+template class Dictionary<long>;

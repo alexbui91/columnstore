@@ -35,7 +35,7 @@ public:
 	virtual ~Column() {
 		delete vecValue;
 		delete dictionary;
-//		PackedArray_destroy(packed);
+		PackedArray_destroy(packed);
 	}
 	vector<size_t>* getVecValue(){
 		// change to bit type
@@ -64,30 +64,31 @@ public:
 
 	//  re-order vecValue after building entire dictionary using bulk insert
 	void rebuildVecValue() {
-		vecValue->resize(0);
-		// sort dictionary
-		dictionary->sort();
-		dictionary->setIsSorted(true);
-		// get bulkVecValue vector
-		vector<T>* bulkVecValue = dictionary->getBulkVecValue();
-		if (bulkVecValue != NULL) {
-			for (size_t i = 0; i < bulkVecValue->size(); i++) {
-				// find position of valueId in dictionary
-				vector<size_t> result;
-				dictionary->search(ColumnBase::equal, result, bulkVecValue->at(i));
-				size_t pos = result[0];
-				if (pos != -1) vecValue->push_back(pos);
+		if(this->bulkInsert){
+			vecValue->resize(0);
+			// sort dictionary
+			dictionary->sort();
+			dictionary->setIsSorted(true);
+			// get bulkVecValue vector
+			vector<T>* bulkVecValue = dictionary->getBulkVecValue();
+			if (bulkVecValue != NULL) {
+				for (size_t i = 0; i < bulkVecValue->size(); i++) {
+					// find position of valueId in dictionary
+					vector<size_t> result;
+					dictionary->search(ColumnBase::equal, result, bulkVecValue->at(i));
+					size_t pos = result[0];
+					if (pos != -1) vecValue->push_back(pos);
+				}
 			}
+			bulkVecValue->resize(0);
 		}
-		bulkVecValue->resize(0);
 	}
 
 	void processColumn() {
 		if (this->getType() == ColumnBase::intType ||
 				this->getType() == ColumnBase::uIntType ||
 				this->getType() == ColumnBase::llType) {
-			if (this->bulkInsert)
-				this->rebuildVecValue();
+			this->rebuildVecValue();
 			this->createBitPackingVecValue();
 			this->getDictionary()->clearTemp();
 		}
