@@ -64,6 +64,7 @@ size_t Dictionary<T>::addItem(T& value, vector<size_t>* vecValue, bool sorted, b
 		(*sMap)[value] = 1;
 		return 0;
 	} else if (!sorted) {
+		// normal case, bulk insert
 		// check if value existed on dictionary
 		if ((*sMap)[value] == 0) {
 			items->push_back(value);
