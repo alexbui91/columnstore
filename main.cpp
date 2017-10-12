@@ -61,15 +61,18 @@ int parseLine(char* line){
 int getMemory(){ //Note: this value is in KB!
 	FILE* file = fopen("/proc/self/status", "r");
 	int result = -1;
-	char line[128];
-
-	while (fgets(line, 128, file) != NULL){
-		if (strncmp(line, "VmRSS:", 6) == 0){
-			result = parseLine(line);
-			break;
+	if (file == NULL) {
+		perror("Can't read memory status");
+	} else {
+		char line[128];
+		while (fgets(line, 128, file) != NULL){
+			if (strncmp(line, "VmRSS:", 6) == 0){
+				result = parseLine(line);
+				break;
+			}
 		}
+		fclose(file);
 	}
-	fclose(file);
 	return result;
 }
 
@@ -214,7 +217,7 @@ int main(void){
 	Column<unsigned int>* col = (Column<unsigned int>*) col_b;
 	unsigned int input = 40U;
 	col->getDictionary()->search(ColumnBase::equal, result, input);
-	cout << "Dictionary size of sid: " << col->getDictionary()->size() << " with size: " << col->getDictionary()->getMemoryConsumption()  << endl;
+	cout << "Dictionary size of sid: " << col->getDictionary()->size() << " with size: " << col->getDictionary()->getMemoryConsumption() << "b" << endl;
 	cout << "Total row of sid = 40: " << result.size() << endl;
 	t2 = clock();
 	cout << "Running time of sid = 40: " << ((float)t2-(float)t1) / CLOCKS_PER_SEC  << "s"  << endl;
@@ -228,8 +231,8 @@ int main(void){
 	col_b = columns.at(2);
 	col = (Column<unsigned int>*) col_b;
 	input = 5000000U;
-	col->getDictionary()->search(ColumnBase::lt, result, input);
-	cout << "Dictionary size of v : " << col->getDictionary()->size() << " with size: " << col->getDictionary()->getMemoryConsumption() << endl;
+	col->getDictionary()->search(ColumnBase::gt, result, input);
+	cout << "Dictionary size of v : " << col->getDictionary()->size() << " with size: " << col->getDictionary()->getMemoryConsumption() << "b" << endl;
 	cout << "Total row of V > 5,000,000: " << result.size() << endl;
 	t2 = clock();
 	cout << "Running time of V > 5,000,000: " << ((float)t2-(float)t1) / CLOCKS_PER_SEC  << "s" << endl;
@@ -244,8 +247,8 @@ int main(void){
 	Column<bigint>* ts = (Column<bigint>*) col_b;
 	bigint input1 = 1000000000000000LL;
 	bigint input2 = 12100000000000000LL;
-	cout << "Dictionary size of ts in lossless : " << col->getDictionary()->size() << " with size: " << col->getDictionary()->getMemoryConsumption() << endl;
-	cout << "Dictionary size of ts in lossy : " << ts_lossy->getDictionary()->size() << " with size: " << ts_lossy->getDictionary()->getMemoryConsumption() << endl;
+	cout << "Dictionary size of ts in lossless : " << col->getDictionary()->size() << " with size: " << col->getDictionary()->getMemoryConsumption() << "b" << endl;
+	cout << "Dictionary size of ts in lossy : " << ts_lossy->getDictionary()->size() << " with size: " << ts_lossy->getDictionary()->getMemoryConsumption() << "b" << endl;
 	ts->getDictionary()->search(ColumnBase::range, result, input1, input2);
 	cout << "Total row of 100e14 < TS < 121e14: " << result.size() << endl;
 	t2 = clock();

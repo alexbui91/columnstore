@@ -1,39 +1,39 @@
-Memory status before: 1740kb
-Loading time: 7.047s
-Memory consumption after loading: 137640kb
-Dictionary size of sid: 41 with size: 172
+Memory status before: 1628kb
+Loading time: 7.31008s
+Memory consumption after loading: 137628kb
+Dictionary size of sid: 41 with size: 172b
 Total row of sid = 40: 1
-Running time of sid = 40: 4.5e-05s
+Running time of sid = 40: 2.9e-05s
 Dictionary[11] = 40
-Memory consumption after perform sid = 40: 137640kb
-Dictionary size of v : 387008 with size: 1548040
-Total row of V > 5,000,000: 386788
-Running time of V > 5,000,000: 0.016313s
-Dictionary[0] = 1056
-Dictionary[1] = 1251
-Dictionary[2] = 1648
-Dictionary[3] = 1762
-Dictionary[4] = 1837
-Dictionary[5] = 1865
-Dictionary[6] = 1893
-Dictionary[7] = 1949
-Dictionary[8] = 2076
-Dictionary[9] = 2191
-Dictionary[10] = 2223
-Dictionary[11] = 2244
-Dictionary[12] = 2331
-Dictionary[13] = 2393
-Dictionary[14] = 2510
-Dictionary[15] = 2549
-Dictionary[16] = 2592
-Dictionary[17] = 2642
-Dictionary[18] = 2644
-Dictionary[19] = 2681
-Memory consumption after perform V > 5,000,000: 144864kb
-Dictionary size of ts in lossless : 387008 with size: 1548040
-Dictionary size of ts in lossy : 80407 with size: 643264
+Memory consumption after perform sid = 40: 137628kb
+Dictionary size of v : 387008 with size: 1548040b
+Total row of V > 5,000,000: 220
+Running time of V > 5,000,000: 0.002686s
+Dictionary[386788] = 5000050
+Dictionary[386789] = 5002070
+Dictionary[386790] = 5003618
+Dictionary[386791] = 5003629
+Dictionary[386792] = 5005054
+Dictionary[386793] = 5005500
+Dictionary[386794] = 5007054
+Dictionary[386795] = 5007878
+Dictionary[386796] = 5008843
+Dictionary[386797] = 5008907
+Dictionary[386798] = 5008938
+Dictionary[386799] = 5011358
+Dictionary[386800] = 5012076
+Dictionary[386801] = 5012676
+Dictionary[386802] = 5013514
+Dictionary[386803] = 5014629
+Dictionary[386804] = 5015802
+Dictionary[386805] = 5017208
+Dictionary[386806] = 5017254
+Dictionary[386807] = 5018781
+Memory consumption after perform V > 5,000,000: 137628kb
+Dictionary size of ts in lossless : 387008 with size: 1548040b
+Dictionary size of ts in lossy : 80407 with size: 643264b
 Total row of 100e14 < TS < 121e14: 1048576
-Running time of 100e14 < TS < 121e14: 0.023998s
+Running time of 100e14 < TS < 121e14: 0.024251s
 Dictionary[0] = 10629342490369879
 Dictionary[1] = 10629347605342274
 Dictionary[2] = 10629352720314738
@@ -54,9 +54,9 @@ Dictionary[16] = 10634736654612317
 Dictionary[17] = 10634737426529044
 Dictionary[18] = 10634738740592737
 Dictionary[19] = 10634740108248464
-Memory consumption after perform 100e14 < TS < 100e14: 145964kb
+Memory consumption after perform 100e14 < TS < 100e14: 146104kb
 Total row of 100e14 < TS < 121e14 in lossy dict: 80407
-Running time of 100e14 < TS < 121e14 in lossy dict: 0.001725s
+Running time of 100e14 < TS < 121e14 in lossy dict: 0.001703s
 Dictionary[0] = 10629342
 Dictionary[1] = 10629347
 Dictionary[2] = 10629352
@@ -77,4 +77,4 @@ Dictionary[16] = 10634736
 Dictionary[17] = 10634737
 Dictionary[18] = 10634738
 Dictionary[19] = 10634740
-Memory consumption after perform 100e14 < TS < 100e14 in lossy dict: 145964kb
+Memory consumption after perform 100e14 < TS < 100e14 in lossy dict: 146104kb

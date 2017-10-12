@@ -100,6 +100,8 @@ public:
 
 		for (size_t i = 0; i < vecValue->size(); i++) {
 			size_t value = vecValue->at(i);
+			// value is position in dict
+			// i is position in original column
 			PackedArray_set(packed, i, value);
 		}
 		// free space vecValue
