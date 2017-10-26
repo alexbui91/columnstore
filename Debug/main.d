@@ -1,10 +1,14 @@
-main.o: ../main.cpp ../Dictionary.h ../ColumnBase.h ../Column.h \
- ../PackedArray.h
+main.o: ../main.cpp ../Table.h ../ColumnBase.h ../Column.h \
+ ../Dictionary.h ../PackedArray.h ../utils.h
 
-../Dictionary.h:
+../Table.h:
 
 ../ColumnBase.h:
 
 ../Column.h:
 
+../Dictionary.h:
+
 ../PackedArray.h:
+
+../utils.h:

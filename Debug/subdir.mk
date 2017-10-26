@@ -7,6 +7,7 @@ CPP_SRCS += \
 ../Column.cpp \
 ../ColumnBase.cpp \
 ../Dictionary.cpp \
+../Table.cpp \
 ../main.cpp 
 
 C_SRCS += \
@@ -17,12 +18,14 @@ OBJS += \
 ./ColumnBase.o \
 ./Dictionary.o \
 ./PackedArray.o \
+./Table.o \
 ./main.o 
 
 CPP_DEPS += \
 ./Column.d \
 ./ColumnBase.d \
 ./Dictionary.d \
+./Table.d \
 ./main.d 
 
 C_DEPS += \
