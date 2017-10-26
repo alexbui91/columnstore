@@ -49,7 +49,7 @@ struct _PackedArray
 typedef struct _PackedArray PackedArray;
 
 // creation / destruction
-PackedArray* PackedArray_create(uint32_t bitsPerItem, uint32_t count);
+PackedArray* PackedArray_create(uint32_t w, uint32_t count);
 void PackedArray_destroy(PackedArray* a);
 
 // packing / unpacking
