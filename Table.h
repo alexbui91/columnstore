@@ -202,32 +202,8 @@ public:
 			Column<unsigned int>* id = (Column<unsigned int>*) base;
 			vector<size_t>* value = id->getVecValue();
 			string tmp = "";
-			for(size_t i = 0; i < value->size(); i++){
-				for(size_t j = 0; j < this->columns->size(); j++){
-					base = this->columns->at(j);
-					switch (col_type->at(i)) {
-					case ColumnBase::uIntType: {
-						Column<unsigned int>* col =
-								(Column<unsigned int>*) this->columns->at(i);
-						col->processColumn();
-						break;
-					}
-					case ColumnBase::intType: {
-						Column<int>* col2 = (Column<int>*) this->columns->at(i);
-						col2->processColumn();
-						break;
-					}
-					case ColumnBase::llType: {
-						Column<bigint>* col3 = (Column<bigint>*) this->columns->at(i);
-						col3->processColumn();
-						break;
-					}
-					default:
-						Column<string>* col4 = (Column<string>*) this->columns->at(i);
-						col4->processColumn();
-						break;
-					}
-					tmp.append();
+			for(size_t j = 0; j < value->size(); j++){
+				for(size_t i = 0; i < this->columns->size(); i++){
 				}
 				cout << tmp << endl;
 				tmp.clear();

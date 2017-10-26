@@ -16,6 +16,8 @@
 using namespace std;
 
 using bigint = long long int;
+unordered_map<size_t, size_t>* translation_table;
+unordered_map<size_t, size_t>* final_result;
 
 template<class T>
 bool contain(vector<T> &vec, T &item) {
@@ -75,6 +77,12 @@ int getMemory() { //Note: this value is in KB!
 	}
 	return result;
 }
+
+// create a translation table
+void create_translation(){
+
+}
+// combine result of a and b (row_id_a, row_id_b)
 
 int main(void) {
 	string prefix = "/home/alex/Documents/database/assignment2/raw";

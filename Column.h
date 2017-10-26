@@ -118,6 +118,12 @@ public:
 //			cout << "vecValue[" << i << "] = " << (*vecValue)[i] << "\n";
 //		}
 //	}
+
+	// look up real value from dictionary items: find in A (1, apple_in_a)
+
+	// look up position from real value from dictionary items: find in B (apple, 2_in_b)
+
+	// mapping in vecValue (row_id of B) with dict position of column A (pos_a, row_id_b)
 };
 
 }
