@@ -402,6 +402,10 @@ void Dictionary<T>::search(ColumnBase::OP_TYPE opType, vector<size_t>& result, T
 		}
 	}
 }
+template<class T>
+vector<T>* Dictionary<T>::get_all(){
+	return items;
+}
 
 template<class T>
 void Dictionary<T>::sort() {

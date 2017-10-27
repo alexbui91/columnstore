@@ -14,12 +14,13 @@
 
 namespace std {
 template<typename T>
-class Column: public ColumnBase{
+class Column: public ColumnBase {
 private:
 	// value vector for column corresponding (whole column with each row id) to position in items of dictionary
 	vector<size_t>* vecValue;
+	vector<size_t>* lookup_result;
 	// bit packing array
-//	PackedArray* packed;
+	PackedArray* packed;
 	// dictionary vector for column
 	Dictionary<T>* dictionary;
 
@@ -29,42 +30,47 @@ public:
 	Column() {
 		dictionary = new Dictionary<T>();
 		vecValue = new vector<size_t>();
-//		packed = new PackedArray();
+		packed = new PackedArray();
+		lookup_result = new vector<size_t>();
 	}
 
 	virtual ~Column() {
 		delete vecValue;
 		delete dictionary;
-//		PackedArray_destroy(packed);
+		delete lookup_result;
+		PackedArray_destroy(packed);
 	}
-	vector<size_t>* getVecValue(){
+	vector<size_t>* getVecValue() {
 		// change to bit type
-//		if (vecValue == NULL) {
-//			vecValue = new vector<size_t>();
-//		}
-//		vecValue->clear();
-//		for (int i = 0; i < packed->count; i++) {
-//			vecValue->push_back(PackedArray_get(packed, i));
-//		}
+		if (vecValue == NULL) {
+			vecValue = new vector<size_t>();
+		}
+		if(packed->count){
+			vecValue->clear();
+			for (int i = 0; i < packed->count; i++) {
+				vecValue->push_back(PackedArray_get(packed, i));
+			}
+		}
 		return vecValue;
 	}
-//	PackedArray* getPacked(){
-//		return packed;
-//	}
-	Dictionary<T>* getDictionary(){
+	PackedArray* getPacked(){
+		return packed;
+	}
+	Dictionary<T>* getDictionary() {
 		if (dictionary == NULL) {
 			dictionary = new Dictionary<T>();
 		}
 		return dictionary;
 	}
-	void updateDictionary(T& value, bool sorted = false, bool bulkInsert = true){
+	void updateDictionary(T& value, bool sorted = false,
+			bool bulkInsert = true) {
 		this->bulkInsert = bulkInsert;
 		dictionary->addItem(value, vecValue, sorted, bulkInsert);
 	}
 
 	//  re-order vecValue after building entire dictionary using bulk insert
 	void rebuildVecValue() {
-		if(this->bulkInsert){
+		if (this->bulkInsert) {
 			vecValue->resize(0);
 			// sort dictionary
 			dictionary->sort();
@@ -75,9 +81,11 @@ public:
 				for (size_t i = 0; i < bulkVecValue->size(); i++) {
 					// find position of valueId in dictionary
 					vector<size_t> result;
-					dictionary->search(ColumnBase::equal, result, bulkVecValue->at(i));
+					dictionary->search(ColumnBase::equal, result,
+							bulkVecValue->at(i));
 					size_t pos = result[0];
-					if (pos != -1) vecValue->push_back(pos);
+					if (pos != -1)
+						vecValue->push_back(pos);
 				}
 			}
 			bulkVecValue->resize(0);
@@ -85,39 +93,57 @@ public:
 	}
 
 	void processColumn() {
-		if (this->getType() == ColumnBase::intType ||
-				this->getType() == ColumnBase::uIntType ||
-				this->getType() == ColumnBase::llType) {
+		if (this->getType() == ColumnBase::intType
+				|| this->getType() == ColumnBase::uIntType
+				|| this->getType() == ColumnBase::llType) {
 			this->rebuildVecValue();
-//			this->createBitPackingVecValue();
+			this->createBitPackingVecValue();
 			this->getDictionary()->clearTemp();
 		}
 	}
-//	void createBitPackingVecValue() {
-//		size_t numOfBit = (size_t) ceil(log2((double) dictionary->size()));
-//		// init bit packing array
-//		packed = PackedArray_create(numOfBit, vecValue->size());
+	void createBitPackingVecValue() {
+		size_t numOfBit = (size_t) ceil(log2((double) dictionary->size()));
+		// init bit packing array
+		packed = PackedArray_create(numOfBit, vecValue->size());
+
+		for (size_t i = 0; i < vecValue->size(); i++) {
+			size_t value = vecValue->at(i);
+			// value is position in dict
+			// i is position in original column
+			PackedArray_set(packed, i, value);
+		}
+		// free space vecValue
+		vecValue->resize(0);
+	}
+
+	vector<size_t>* lookup_rowid(size_t length, vector<size_t>& lookup_result) {
+		vector<size_t>* results = new vector<size_t>();
+		size_t pos = -1;
+		for(size_t i = 0; i < length; i++){
+			pos = lookup_packed(i);
+			if(pos != -1 && find(lookup_result.begin(), lookup_result.end(), pos) != lookup_result.end()){
+				results->push_back(i);
+			}
+		}
+		cout << "size of results" << results->size();
+		return results;
+	}
+	// return -1 in case of missing
+	size_t lookup_packed(size_t i) {
+		size_t pos = -1;
+		if(packed->count){
+			pos = PackedArray_get(packed, i);
+		}else{
+			pos = this->vecValue->at(i);
+		}
+		return pos;
+	}
 //
-//		for (size_t i = 0; i < vecValue->size(); i++) {
-//			size_t value = vecValue->at(i);
-//			// value is position in dict
-//			// i is position in original column
-//			PackedArray_set(packed, i, value);
-//		}
-//		// free space vecValue
-//		vecValue->resize(0);
-//	}
-//
-//	size_t lookup_packed(size_t i){
-//		return PackedArray_get(packed, i);
-//	}
-//
-//	void printVecValue(int row) {
-//		vecValue = getVecValue();
-//		for (size_t i = 0; i < (*vecValue).size() && i < row; i++) {
-//			cout << "vecValue[" << i << "] = " << (*vecValue)[i] << "\n";
-//		}
-//	}
+	void printVecValue(int row) {
+		for (size_t i = 0; i < (*vecValue).size() && i < row; i++) {
+			cout << "vecValue[" << i << "] = " << (*vecValue)[i] << "\n";
+		}
+	}
 
 	// look up real value from dictionary items: find in A (1, apple_in_a)
 
@@ -127,7 +153,5 @@ public:
 };
 
 }
-
-
 
 #endif /* SRC_COLUMN_H_ */

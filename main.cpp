@@ -13,11 +13,11 @@
 #include "Column.h"
 #include "ColumnBase.h"
 
+#include "hsql/SQLParser.h"
+
 using namespace std;
 
 using bigint = long long int;
-unordered_map<size_t, size_t>* translation_table;
-unordered_map<size_t, size_t>* final_result;
 
 template<class T>
 bool contain(vector<T> &vec, T &item) {
@@ -90,6 +90,14 @@ int main(void) {
 	t1 = clock();
 	int memory = getMemory();
 	cout << "Memory status before: " << memory << "kb" << endl;
+
+	const string query1 = "SELECT * from events JOIN sensors ON events.sid = sensors.sid";
+	string query2 = "SELECT * from events JOIN sensors ON events.sid = sensors.sid WHERE sensors.type = 1 AND events.v > 5,000,000";
+	string query3 = "SELECT * from events JOIN sensors ON events.sid = sensors.sid JOIN entities ON entities.eid = sensors.eid WHERE entities.name = “Ball 1” AND events.v > 5,000,000";
+
+//	hsql::SQLParserResult result;
+//	hsql::SQLParser::parse(query1, &result);
+
 	string entity_path = prefix + "/sample-game.csv";
 	string sensors_path = prefix + "/sensors.csv";
 	string entities_path = prefix + "/entities.csv";
@@ -99,6 +107,7 @@ int main(void) {
 	vector<string> sensor_name = { "sid", "eid", "type" };
 	vector<string> events_name = { "sid", "ts", "x", "y", "z", "v", "a", "vx",
 			"vy", "vz", "ax", "ay", "az" };
+
 	// init colummn type
 	vector<ColumnBase::COLUMN_TYPE> events_type = { ColumnBase::uIntType,
 			ColumnBase::llType, ColumnBase::intType, ColumnBase::intType,
@@ -109,17 +118,54 @@ int main(void) {
 			ColumnBase::uIntType, ColumnBase::uIntType };
 	vector<ColumnBase::COLUMN_TYPE> entity_type = { ColumnBase::uIntType,
 			ColumnBase::varcharType, ColumnBase::varcharType};
-//	Table* events = new Table("events", &events_type, &events_name);
-//	events->build_structure(entity_path);
+
+
 	Table* entities = new Table("enities", &entity_type, &entity_name);
 	entities->build_structure(entities_path);
-//	Table* sensors = new Table("sensors", &sensor_type, &sensor_name);
-//	sensors->build_structure(sensors_path);
-	entities->print_table(20);
+	Table* sensors = new Table("sensors", &sensor_type, &sensor_name);
+	sensors->build_structure(sensors_path);
+//	Table* events = new Table("events", &events_type, &events_name);
+//	events->build_structure(entity_path);
+//	sensors->print_table(20);
+//	entities->print_table(20);
+	cout << "Load done!";
 
 	t2 = clock();
 
-	// create table
+	// create translation
+	unordered_map<size_t, size_t>* events_sensor;
+	unordered_map<size_t, size_t>* final_result;
+
+	// selection => actual value
+	// select all mean get actual value
+
+//	vector<unsigned int>* eid = events->select_all(0);
+//	vector<unsigned int>* sid = sensors->select_all(0);
+	vector<unsigned int>* eid;
+	vector<unsigned int>* sid;
+	// query 2
+
+	// if search => need to look up
+//	ColumnBase* col_b = events->getColumns()->at(5);
+//	Column<unsigned int>* e_v = (Column<unsigned int>*) col_b;
+	unsigned int input = 5000000U;
+	vector<size_t> r_v;
+//	e_v->getDictionary()->search(ColumnBase::gt, r_v, input);
+	// sensor_type
+	ColumnBase* col_b = sensors->getColumns()->at(2);
+	Column<unsigned int>* s_type = (Column<unsigned int>*) col_b;
+	vector<size_t> r_t;
+	input = 1U;
+	s_type->getDictionary()->search(ColumnBase::equal, r_t, input);
+
+//	eid->clear();
+//	sid->clear();
+
+	sensors->lookup_id(r_t, 2, 0);
+
+//	for(size_t i = 0; i < sid->size(); i++){
+//		cout << sid->at(i);
+//	}
 
 	return 0;
 

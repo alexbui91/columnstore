@@ -8,10 +8,20 @@ CPP_SRCS += \
 ../ColumnBase.cpp \
 ../Dictionary.cpp \
 ../Table.cpp \
-../main.cpp 
+../main.cpp \
+../utils.cpp 
 
 C_SRCS += \
 ../PackedArray.c 
+
+O_SRCS += \
+../Column.o \
+../ColumnBase.o \
+../Dictionary.o \
+../PackedArray.o \
+../Table.o \
+../main.o \
+../utils.o 
 
 OBJS += \
 ./Column.o \
@@ -19,14 +29,16 @@ OBJS += \
 ./Dictionary.o \
 ./PackedArray.o \
 ./Table.o \
-./main.o 
+./main.o \
+./utils.o 
 
 CPP_DEPS += \
 ./Column.d \
 ./ColumnBase.d \
 ./Dictionary.d \
 ./Table.d \
-./main.d 
+./main.d \
+./utils.d 
 
 C_DEPS += \
 ./PackedArray.d 
@@ -36,7 +48,7 @@ C_DEPS += \
 %.o: ../%.cpp
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ -O0 -g3 -Wall -c -fmessage-length=0 -std=c++11 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)" -o "$@" "$<"
+	g++ -I/home/alex/workspacec/sql-parser -O0 -g3 -Wall -c -fmessage-length=0 -std=c++11 -lsqlparser -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 

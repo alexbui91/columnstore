@@ -63,6 +63,7 @@ public:
 	void print(int row);
 	void search(ColumnBase::OP_TYPE opType, vector<size_t>& result, T& value);
 	void search(ColumnBase::OP_TYPE opType, vector<size_t>& result, T& value, T& value2);
+	vector<T>* get_all();
 	void sort();
 	vector<T>* getBulkVecValue() {
 		return bulkVecValue;
