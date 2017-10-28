@@ -115,7 +115,7 @@ public:
 		// free space vecValue
 		vecValue->resize(0);
 	}
-
+	// look up row_id that fits to condition_result
 	vector<size_t>* lookup_rowid(size_t length, vector<size_t>& lookup_result) {
 		vector<size_t>* results = new vector<size_t>();
 		size_t pos = -1;
@@ -125,7 +125,6 @@ public:
 				results->push_back(i);
 			}
 		}
-		cout << "size of results" << results->size();
 		return results;
 	}
 	// return -1 in case of missing

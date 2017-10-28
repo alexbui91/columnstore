@@ -12,14 +12,19 @@
 
 #include <boost/bimap.hpp>
 
-#include "ColumnBase.h";
-#include "Column.h";
+#include "ColumnBase.h"
+#include "Column.h"
 
-#include "utils.h";
+#include "utils.h"
 
 using namespace std;
 
 using bigint = long long int;
+
+typedef boost::bimap<size_t, unsigned int> pos_id;
+typedef boost::bimap<size_t, size_t> map_idx_idx;
+typedef pos_id::value_type position;
+typedef map_idx_idx::value_type idx2pos;
 
 class Table {
 private:
@@ -219,40 +224,75 @@ public:
 		}
 	}
 
-	vector<unsigned int>* select_all(int i) {
-		vector<unsigned int>* result;
-		Column<unsigned int>* col = (Column<unsigned int>*) this->columns->at(
+	pos_id select_all(int i, map<size_t, size_t>& row_dict, vector<size_t>* rowids = NULL) {
+		Column<unsigned int>* rid = (Column<unsigned int>*) this->columns->at(
 				i);
-		result = col->getDictionary()->get_all();
-		return result;
+		rowids = new vector<size_t>();
+		size_t index = -1;
+		// first dimension translation table
+		unsigned int value = 0U;
+		pos_id tmp_dict;
+		pos_id::left_const_iterator it;
+		for(size_t i = 0; i < this->length; i++){
+			rowids->push_back(i);
+			// position in dictionary
+			index = rid->lookup_packed(i);
+			// actual value
+			row_dict[i] = *(*rid).getDictionary()->lookup(index);
+			it = tmp_dict.left.find(index);
+			if (it == tmp_dict.left.end()) {
+				value = row_dict[i];
+				if(value != NULL){
+					tmp_dict.insert(position(index, value));
+				}
+			}
+		}
+		return tmp_dict;
 	}
-
 	// input is a list of postion in dictionary
 	// need to look up rowid in vecValue
 	// c, col is selection column
 	// i, rid is id column or join column
-	void lookup_id(vector<size_t>& input, int c, int i) {
+	// map_idx_idx is a map its key is row id and value is dictionary pos
+	// return a map of <dict_pos, dict_actual_value>
+	pos_id lookup_id(vector<size_t>& input, int c, int i, map<size_t, size_t>& row_dict, vector<size_t>* rowids = NULL) {
 		Column<unsigned int>* rid = (Column<unsigned int>*) this->columns->at(
 				i);
 		Column<unsigned int>* col = (Column<unsigned int>*) this->columns->at(
 				c);
-		cout << "length of input" << input.size() << endl;
-		vector<size_t>* rowid = col->lookup_rowid(length, input);
-//		unordered_map<size_t, unsigned int>* tmp_dict = new unordered_map<size_t, unsigned int>();
-		boost::bimap<size_t, unsigned int>* tmp_dict;
-		size_t index = 0;
-		for(size_t i = 0; i < (*rowid).size(); i++){
-			index = rowid->at(i);
-			if(tmp_dict->find(index) == tmp_dict->end()){
-				(*tmp_dict).insert(bm_type::value_type(index, *rid->getDictionary()->lookup(index)));
-			}
+		// row_ids of selection results
+		if(rowids == NULL){
+			rowids = col->lookup_rowid(length, input);
 		}
-		cout << "size of dictionary " << tmp_dict->size();
-		// get dictionary positions
-//		for(size_t i = 0; i < rowid->size(); i++){
-//			cout << rowid->at(i) << endl;
-//		}
+		cout << "length of rowids " << rowids -> size() << endl;
+		// create map of dict_pos vs dict_actual_value
+//		map<size_t, unsigned int>* tmp_dict = new map<size_t, unsigned int>();
+		pos_id tmp_dict;
+		pos_id::left_const_iterator it;
+		size_t index = 0;
+		size_t row_id = -1;
+		unsigned int value = 0U;
+		for(size_t i = 0; i < (*rowids).size(); i++){
+			row_id = rowids->at(i);
+			// index in dictionary
+			index = rid->lookup_packed(row_id);
+			// actual value
+			row_dict[row_id] = *(*rid).getDictionary()->lookup(index);
+			it = tmp_dict.left.find(index);
+			if (it == tmp_dict.left.end()) {
+				value = row_dict[row_id];
+				if(value != NULL){
+					tmp_dict.insert(position(index, value));
+				}
+			}
+//			if(tmp_dict->find(index) == tmp_dict->end()){
+//				(*tmp_dict)[index] = *rid->getDictionary()->lookup(index);
+//			}
+		}
+//		cout << "size of dictionary " << tmp_dict->size();
+		return tmp_dict;
 	}
+
 	void print_table(int limit) {
 		cout << "Print table data " << this->getName() << endl;
 		if (this->is_table_exist()) {

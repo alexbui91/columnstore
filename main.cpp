@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <ctime>
 
+#include <boost/bimap.hpp>
+
 #include "stdlib.h"
 #include "stdio.h"
 #include "string.h"
@@ -13,11 +15,14 @@
 #include "Column.h"
 #include "ColumnBase.h"
 
-#include "hsql/SQLParser.h"
-
 using namespace std;
 
 using bigint = long long int;
+
+typedef boost::bimap<size_t, unsigned int> pos_id;
+typedef boost::bimap<size_t, size_t> map_idx_idx;
+typedef pos_id::value_type position;
+typedef map_idx_idx::value_type idx2pos;
 
 template<class T>
 bool contain(vector<T> &vec, T &item) {
@@ -79,21 +84,59 @@ int getMemory() { //Note: this value is in KB!
 }
 
 // create a translation table
-void create_translation(){
-
+// join from eid_pos_value to sid_pos_value
+pos_id create_tranlation_table(pos_id eid_pos_value, pos_id sid_pos_value){
+	pos_id::right_const_iterator it;
+	pos_id translation_table;
+	for (pos_id::left_const_iterator pos_dict = eid_pos_value.left.begin(),
+			iend = eid_pos_value.left.end(); pos_dict != iend; ++pos_dict) {
+		it = sid_pos_value.right.find(pos_dict->second);
+		if (it != sid_pos_value.right.end()) {
+			// find actual value in b
+			translation_table.insert(position(pos_dict->first, it->first));
+		}
+	}
+	return translation_table;
 }
-// combine result of a and b (row_id_a, row_id_b)
+
+void print_translation_table(pos_id translation_table){
+	// print translation table
+	cout << "| A | B |" << endl;
+	for (pos_id::left_const_iterator pos_dict = translation_table.left.begin(),
+			iend = translation_table.left.end(); pos_dict != iend; ++pos_dict) {
+		cout << pos_dict->first << "|" << pos_dict->second << "|" << endl;
+	}
+}
+
+void print_query_result(map<size_t, size_t> e_row_dict, pos_id translation_table, int limit){
+	pos_id::right_const_iterator itb;
+	size_t i = 0;
+	cout << "size of table result:  << " << e_row_dict.size() << endl;
+	map<size_t, size_t>::iterator ita;
+	for (ita = e_row_dict.begin(); ita != e_row_dict.end(); ita++) {
+		itb = translation_table.right.find(ita->second);
+		if (itb != translation_table.right.end() && i < limit) {
+			// find row id in b
+			cout << "|" << i << "|" << ita->first << "|" << endl;
+			i++;
+		}
+	}
+}
 
 int main(void) {
+	int limit = 20;
 	string prefix = "/home/alex/Documents/database/assignment2/raw";
 	clock_t t1, t2;
 	t1 = clock();
 	int memory = getMemory();
 	cout << "Memory status before: " << memory << "kb" << endl;
 
-	const string query1 = "SELECT * from events JOIN sensors ON events.sid = sensors.sid";
-	string query2 = "SELECT * from events JOIN sensors ON events.sid = sensors.sid WHERE sensors.type = 1 AND events.v > 5,000,000";
-	string query3 = "SELECT * from events JOIN sensors ON events.sid = sensors.sid JOIN entities ON entities.eid = sensors.eid WHERE entities.name = “Ball 1” AND events.v > 5,000,000";
+	const string query1 =
+			"SELECT * from events JOIN sensors ON events.sid = sensors.sid";
+	string query2 =
+			"SELECT * from events JOIN sensors ON events.sid = sensors.sid WHERE sensors.type = 1 AND events.v > 5,000,000";
+	string query3 =
+			"SELECT * from events JOIN sensors ON events.sid = sensors.sid JOIN entities ON entities.eid = sensors.eid WHERE entities.name = “Ball 1” AND events.v > 5,000,000";
 
 //	hsql::SQLParserResult result;
 //	hsql::SQLParser::parse(query1, &result);
@@ -117,56 +160,98 @@ int main(void) {
 	vector<ColumnBase::COLUMN_TYPE> sensor_type = { ColumnBase::uIntType,
 			ColumnBase::uIntType, ColumnBase::uIntType };
 	vector<ColumnBase::COLUMN_TYPE> entity_type = { ColumnBase::uIntType,
-			ColumnBase::varcharType, ColumnBase::varcharType};
-
+			ColumnBase::varcharType, ColumnBase::varcharType };
 
 	Table* entities = new Table("enities", &entity_type, &entity_name);
 	entities->build_structure(entities_path);
 	Table* sensors = new Table("sensors", &sensor_type, &sensor_name);
 	sensors->build_structure(sensors_path);
-//	Table* events = new Table("events", &events_type, &events_name);
-//	events->build_structure(entity_path);
-//	sensors->print_table(20);
-//	entities->print_table(20);
-	cout << "Load done!";
-
+	Table* events = new Table("events", &events_type, &events_name);
+	events->build_structure(entity_path);
+	cout << "Load done!" << endl;
 	t2 = clock();
 
-	// create translation
-	unordered_map<size_t, size_t>* events_sensor;
-	unordered_map<size_t, size_t>* final_result;
-
-	// selection => actual value
-	// select all mean get actual value
-
-//	vector<unsigned int>* eid = events->select_all(0);
-//	vector<unsigned int>* sid = sensors->select_all(0);
-	vector<unsigned int>* eid;
-	vector<unsigned int>* sid;
+	// query 1
+//	map<size_t, size_t> e_row_dict1;
+//	vector<size_t>* e_row_id1 = NULL;
+//	pos_id e1_pos_value = events->select_all(0, e_row_dict1, e_row_id1);
+//
+//	map<size_t, size_t> s_row_dict1;
+//	vector<size_t>* s_row_id1 = NULL;
+//	pos_id s1_pos_value = sensors->select_all(0, s_row_dict1, s_row_id1);
+//	pos_id translation_table1 = create_tranlation_table(e1_pos_value, s1_pos_value);
+//	print_translation_table(translation_table1);
+//	print_query_result(e_row_dict1, translation_table1, limit);
 	// query 2
 
 	// if search => need to look up
-//	ColumnBase* col_b = events->getColumns()->at(5);
+//	int e_sel = 5;
+//	ColumnBase* col_b = events->getColumns()->at(e_sel);
 //	Column<unsigned int>* e_v = (Column<unsigned int>*) col_b;
+//	unsigned int input = 5000000U;
+//	vector<size_t> r_v;
+//	e_v->getDictionary()->search(ColumnBase::gt, r_v, input);
+
+//	map<size_t, size_t> e_row_dict;
+//	vector<size_t>* e_row_id = NULL;
+//	pos_id eid_pos_value = events->lookup_id(r_v, e_sel, 0, e_row_dict, e_row_id);
+
+//	// sensor_type
+//	int s_sel = 2;
+//	col_b = sensors->getColumns()->at(2);
+//	Column<unsigned int>* s_type = (Column<unsigned int>*) col_b;
+//	vector<size_t> r_t;
+//	input = 2U;
+//	s_type->getDictionary()->search(ColumnBase::equal, r_t, input);
+//
+//	t2 = clock();
+//	// map from row id to dict position on sid
+//	map<size_t, size_t> s_row_dict;
+//	vector<size_t>* s_row_id = NULL;
+//	pos_id sid_pos_value = sensors->lookup_id(r_t, s_sel, 0, s_row_dict, s_row_id);
+//
+//	//iterate a look up b
+//	//create translation table
+//	pos_id translation_table = create_tranlation_table(eid_pos_value, sid_pos_value);
+//	print_translation_table(translation_table);
+//	// final result of query
+//	// loop a rowid dict pos then find in translation table dictionary pos of b
+//	print_query_result(e_row_dict, translation_table, limit);
+
+	// query 3
+	// selection in events
+	int e_sel = 5;
+	ColumnBase* col_b = events->getColumns()->at(e_sel);
+	Column<unsigned int>* e_v = (Column<unsigned int>*) col_b;
 	unsigned int input = 5000000U;
 	vector<size_t> r_v;
-//	e_v->getDictionary()->search(ColumnBase::gt, r_v, input);
-	// sensor_type
-	ColumnBase* col_b = sensors->getColumns()->at(2);
-	Column<unsigned int>* s_type = (Column<unsigned int>*) col_b;
-	vector<size_t> r_t;
-	input = 1U;
-	s_type->getDictionary()->search(ColumnBase::equal, r_t, input);
+	e_v->getDictionary()->search(ColumnBase::gt, r_v, input);
 
-//	eid->clear();
-//	sid->clear();
+	map<size_t, size_t> e_row_dict;
+	vector<size_t>* e_row_id = NULL;
+	pos_id eid_pos_value = events->lookup_id(r_v, e_sel, 0, e_row_dict, e_row_id);
 
-	sensors->lookup_id(r_t, 2, 0);
+	// select all sensors
+	map<size_t, size_t> s_row_dict3;
+	vector<size_t>* s_row_id3 = NULL;
+	pos_id s3_pos_value = sensors->select_all(0, s_row_dict3, s_row_id3);
+	pos_id translation_table_evs = create_tranlation_table(eid_pos_value, s3_pos_value);
+	print_translation_table(translation_table_evs);
 
-//	for(size_t i = 0; i < sid->size(); i++){
-//		cout << sid->at(i);
-//	}
+	// select entities
+	e_sel = 2;
+	col_b = entities->getColumns()->at(e_sel);
+	Column<string>* et_name = (Column<string>*) col_b;
+	map<size_t, size_t> et_row_dict3;
+	vector<size_t>* et_row_id3 = NULL;
+	string name = "Ball 1";
+	vector<size_t> r_et;
+	et_name->getDictionary()->search(ColumnBase::equal, r_et, name);
+	pos_id eid_pos_value = events->lookup_id(r_et, e_sel, 0, et_row_dict3, et_row_id3);
+
+	pos_id translation_table_eet = create_tranlation_table(eid_pos_value, s3_pos_value);
+
+	print_translation_table(translation_table_eet);
 
 	return 0;
-
 }
