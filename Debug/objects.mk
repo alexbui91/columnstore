@@ -4,5 +4,5 @@
 
 USER_OBJS :=
 
-LIBS :=
+LIBS := -l/usr/local/Cellar/boost/1.65.1
 

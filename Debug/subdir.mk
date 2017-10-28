@@ -14,15 +14,6 @@ CPP_SRCS += \
 C_SRCS += \
 ../PackedArray.c 
 
-O_SRCS += \
-../Column.o \
-../ColumnBase.o \
-../Dictionary.o \
-../PackedArray.o \
-../Table.o \
-../main.o \
-../utils.o 
-
 OBJS += \
 ./Column.o \
 ./ColumnBase.o \

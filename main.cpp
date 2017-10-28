@@ -109,19 +109,38 @@ void print_translation_table(pos_id translation_table){
 }
 
 void print_query_result(map<size_t, size_t> e_row_dict, pos_id translation_table, int limit){
-	pos_id::right_const_iterator itb;
+	pos_id::left_const_iterator itb;
 	size_t i = 0;
 	cout << "size of table result:  << " << e_row_dict.size() << endl;
 	map<size_t, size_t>::iterator ita;
 	for (ita = e_row_dict.begin(); ita != e_row_dict.end(); ita++) {
-		itb = translation_table.right.find(ita->second);
-		if (itb != translation_table.right.end() && i < limit) {
+		itb = translation_table.left.find(ita->second);
+		if (itb != translation_table.left.end() && i < limit) {
 			// find row id in b
 			cout << "|" << i << "|" << ita->first << "|" << endl;
 			i++;
 		}
 	}
 }
+
+void print_query_result_mul(map<size_t, size_t> e_row_dict, pos_id translation_table1, pos_id translation_table2, int limit){
+	pos_id::left_const_iterator itb;
+	size_t i = 0;
+	cout << "size of table result:  << " << e_row_dict.size() << endl;
+	map<size_t, size_t>::iterator ita;
+	for (ita = e_row_dict.begin(); ita != e_row_dict.end(); ita++) {
+		itb = translation_table1.left.find(ita->second);
+		if (itb != translation_table1.left.end() && i < limit) {
+			itb = translation_table2.left.find(itb->second);
+			if(itb != translation_table2.left.end() && i < limit){
+				// find row id in b
+				cout << "|" << i << "|" << ita->first << "|" << endl;
+				i++;
+			}
+		}
+	}
+}
+
 
 int main(void) {
 	int limit = 20;
@@ -235,23 +254,27 @@ int main(void) {
 	map<size_t, size_t> s_row_dict3;
 	vector<size_t>* s_row_id3 = NULL;
 	pos_id s3_pos_value = sensors->select_all(0, s_row_dict3, s_row_id3);
+	// translation for envents to sensors
 	pos_id translation_table_evs = create_tranlation_table(eid_pos_value, s3_pos_value);
 	print_translation_table(translation_table_evs);
 
+	// join to entities
+	map<size_t, size_t> set_row_dict;
+	vector<size_t>* set_row_id = NULL;
+	pos_id etid_pos_value = sensors->select_all(1, set_row_dict, set_row_id);
 	// select entities
 	e_sel = 2;
 	col_b = entities->getColumns()->at(e_sel);
 	Column<string>* et_name = (Column<string>*) col_b;
-	map<size_t, size_t> et_row_dict3;
-	vector<size_t>* et_row_id3 = NULL;
 	string name = "Ball 1";
 	vector<size_t> r_et;
 	et_name->getDictionary()->search(ColumnBase::equal, r_et, name);
-	pos_id eid_pos_value = events->lookup_id(r_et, e_sel, 0, et_row_dict3, et_row_id3);
-
-	pos_id translation_table_eet = create_tranlation_table(eid_pos_value, s3_pos_value);
-
-	print_translation_table(translation_table_eet);
+	map<size_t, size_t> et_row_dict3;
+	vector<size_t>* et_row_id3 = NULL;
+	pos_id et_pos_value = entities->lookup_id(r_et, e_sel, 0, et_row_dict3, et_row_id3);
+	pos_id translation_table_set = create_tranlation_table(etid_pos_value, et_pos_value);
+	print_translation_table(translation_table_set);
+	print_query_result_mul(e_row_dict, translation_table_evs, translation_table_set, limit);
 
 	return 0;
 }
