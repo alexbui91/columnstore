@@ -93,7 +93,7 @@ pos_id create_tranlation_table(pos_id eid_pos_value, pos_id sid_pos_value){
 		it = sid_pos_value.right.find(pos_dict->second);
 		if (it != sid_pos_value.right.end()) {
 			// find actual value in b
-			translation_table.insert(position(pos_dict->first, it->first));
+			translation_table.insert(position(pos_dict->first, it->second));
 		}
 	}
 	return translation_table;
@@ -109,13 +109,14 @@ void print_translation_table(pos_id translation_table){
 }
 
 void print_query_result(map<size_t, size_t> e_row_dict, pos_id translation_table, int limit){
-	pos_id::right_const_iterator itb;
+	pos_id::left_const_iterator itb;
 	size_t i = 0;
 	cout << "size of table result:  << " << e_row_dict.size() << endl;
 	map<size_t, size_t>::iterator ita;
 	for (ita = e_row_dict.begin(); ita != e_row_dict.end(); ita++) {
-		itb = translation_table.right.find(ita->second);
-		if (itb != translation_table.right.end() && i < limit) {
+		itb = translation_table.left.find(ita->second);
+//		cout << ita->second << "||" << itb->first << "||" << itb ->second << endl;
+		if (itb != translation_table.left.end() && i < limit) {
 			// find row id in b
 			cout << "|" << i << "|" << ita->first << "|" << endl;
 			i++;
@@ -123,23 +124,23 @@ void print_query_result(map<size_t, size_t> e_row_dict, pos_id translation_table
 	}
 }
 
-void print_query_result_mul(map<size_t, size_t> e_row_dict, pos_id translation_table1, pos_id translation_table2, int limit){
-	pos_id::right_const_iterator itb;
-	size_t i = 0;
-	cout << "size of table result:  << " << e_row_dict.size() << endl;
-	map<size_t, size_t>::iterator ita;
-	for (ita = e_row_dict.begin(); ita != e_row_dict.end(); ita++) {
-		itb = translation_table1.right.find(ita->second);
-		if (itb != translation_table1.right.end() && i < limit) {
-			itb = translation_table2.right.find(itb->second);
-			if(itb != translation_table2.right.end() && i < limit){
-				// find row id in b
-				cout << "|" << i << "|" << ita->first << "|" << endl;
-				i++;
-			}
-		}
-	}
-}
+//void print_query_result_mul(map<size_t, size_t> e_row_dict, pos_id translation_table1, pos_id translation_table2, int limit){
+//	pos_id::right_const_iterator itb;
+//	size_t i = 0;
+//	cout << "size of table result:  << " << e_row_dict.size() << endl;
+//	map<size_t, size_t>::iterator ita;
+//	for (ita = e_row_dict.begin(); ita != e_row_dict.end(); ita++) {
+//		itb = translation_table1.right.find(ita->second);
+//		if (itb != translation_table1.right.end() && i < limit) {
+//			itb = translation_table2.right.find(itb->second);
+//			if(itb != translation_table2.right.end() && i < limit){
+//				// find row id in b
+//				cout << "|" << i << "|" << ita->first << "|" << endl;
+//				i++;
+//			}
+//		}
+//	}
+//}
 
 
 int main(void) {
@@ -250,14 +251,12 @@ int main(void) {
 	map<size_t, size_t> e_row_dict;
 	vector<size_t>* e_row_id = NULL;
 	pos_id eid_pos_value = events->lookup_id(r_v, e_sel, 0, e_row_dict, e_row_id);
-	map<size_t, size_t>::iterator ita;
 	// select all sensors
 	map<size_t, size_t> s_row_dict3;
+	//values look up condition from sensors
 	vector<size_t>* s_row_id3 = NULL;
 	pos_id s3_pos_value = sensors->select_all(0, s_row_dict3, s_row_id3);
-	// translation for envents to sensors
-	pos_id translation_table_evs = create_tranlation_table(eid_pos_value, s3_pos_value);
-	print_translation_table(translation_table_evs);
+
 	// join to entities
 	map<size_t, size_t> set_row_dict;
 	vector<size_t>* set_row_id = NULL;
@@ -278,7 +277,30 @@ int main(void) {
 
 	print_translation_table(translation_table_set);
 
-//	print_query_result_mul(e_row_dict, translation_table_evs, translation_table_set, limit);
+	pos_id::left_const_iterator itb;
+	size_t i = 0;
+	cout << "size of table result:  << " << e_row_dict.size() << endl;
+	map<size_t, size_t>::iterator ita;
+	s_row_id3->resize(0);
+	for (ita = set_row_dict.begin(); ita != set_row_dict.end(); ita++) {
+		itb = translation_table_set.left.find(ita->second);
+		cout << ita->first << "||" << ita->second;
+		if (itb != translation_table_set.left.end() && i < limit) {
+			// find row id in b
+			s_row_id3->push_back(ita->first);
+		}
+	}
+	cout << "after join event vs sensors" << s_row_id3->size() << endl;
+	// relook up sensors with join value from entities
+	vector<size_t> a;
+	s_row_dict3.clear();
+	s3_pos_value = sensors->lookup_id(a, 0, 0, s_row_dict3, s_row_id3);
+	cout << "final lookup" << s3_pos_value.size() << endl;
+	// translation for events to sensors
+	pos_id translation_table_evs = create_tranlation_table(eid_pos_value, s3_pos_value);
+	print_translation_table(translation_table_evs);
+//
+//	print_query_result(e_row_dict, translation_table_evs, limit);
 
 	return 0;
 }

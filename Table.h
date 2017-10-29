@@ -277,10 +277,10 @@ public:
 			// index in dictionary
 			index = rid->lookup_packed(row_id);
 			// actual value
-			row_dict[row_id] = *(*rid).getDictionary()->lookup(index);
+			row_dict[row_id] = index;
 			it = tmp_dict.left.find(index);
 			if (it == tmp_dict.left.end()) {
-				value = row_dict[row_id];
+				value = *(*rid).getDictionary()->lookup(index);
 				if(value != NULL){
 					tmp_dict.insert(position(index, value));
 				}
