@@ -109,13 +109,13 @@ void print_translation_table(pos_id translation_table){
 }
 
 void print_query_result(map<size_t, size_t> e_row_dict, pos_id translation_table, int limit){
-	pos_id::left_const_iterator itb;
+	pos_id::right_const_iterator itb;
 	size_t i = 0;
 	cout << "size of table result:  << " << e_row_dict.size() << endl;
 	map<size_t, size_t>::iterator ita;
 	for (ita = e_row_dict.begin(); ita != e_row_dict.end(); ita++) {
-		itb = translation_table.left.find(ita->second);
-		if (itb != translation_table.left.end() && i < limit) {
+		itb = translation_table.right.find(ita->second);
+		if (itb != translation_table.right.end() && i < limit) {
 			// find row id in b
 			cout << "|" << i << "|" << ita->first << "|" << endl;
 			i++;
@@ -124,15 +124,15 @@ void print_query_result(map<size_t, size_t> e_row_dict, pos_id translation_table
 }
 
 void print_query_result_mul(map<size_t, size_t> e_row_dict, pos_id translation_table1, pos_id translation_table2, int limit){
-	pos_id::left_const_iterator itb;
+	pos_id::right_const_iterator itb;
 	size_t i = 0;
 	cout << "size of table result:  << " << e_row_dict.size() << endl;
 	map<size_t, size_t>::iterator ita;
 	for (ita = e_row_dict.begin(); ita != e_row_dict.end(); ita++) {
-		itb = translation_table1.left.find(ita->second);
-		if (itb != translation_table1.left.end() && i < limit) {
-			itb = translation_table2.left.find(itb->second);
-			if(itb != translation_table2.left.end() && i < limit){
+		itb = translation_table1.right.find(ita->second);
+		if (itb != translation_table1.right.end() && i < limit) {
+			itb = translation_table2.right.find(itb->second);
+			if(itb != translation_table2.right.end() && i < limit){
 				// find row id in b
 				cout << "|" << i << "|" << ita->first << "|" << endl;
 				i++;
@@ -144,7 +144,8 @@ void print_query_result_mul(map<size_t, size_t> e_row_dict, pos_id translation_t
 
 int main(void) {
 	int limit = 20;
-	string prefix = "/home/alex/Documents/database/assignment2/raw";
+//	string prefix = "/home/alex/Documents/database/assignment2/raw";
+	string prefix = "/Users/alex/Documents/workspacecplus/columnstore/data";
 	clock_t t1, t2;
 	t1 = clock();
 	int memory = getMemory();
@@ -165,7 +166,7 @@ int main(void) {
 	string entities_path = prefix + "/entities.csv";
 
 	// init column name
-	vector<string> entity_name = { "eid", "type", "name" };
+	vector<string> entity_name = { "eid", "name", "type"};
 	vector<string> sensor_name = { "sid", "eid", "type" };
 	vector<string> events_name = { "sid", "ts", "x", "y", "z", "v", "a", "vx",
 			"vy", "vz", "ax", "ay", "az" };
@@ -179,7 +180,7 @@ int main(void) {
 	vector<ColumnBase::COLUMN_TYPE> sensor_type = { ColumnBase::uIntType,
 			ColumnBase::uIntType, ColumnBase::uIntType };
 	vector<ColumnBase::COLUMN_TYPE> entity_type = { ColumnBase::uIntType,
-			ColumnBase::varcharType, ColumnBase::varcharType };
+			ColumnBase::varcharType, ColumnBase::uIntType };
 
 	Table* entities = new Table("enities", &entity_type, &entity_name);
 	entities->build_structure(entities_path);
@@ -210,11 +211,11 @@ int main(void) {
 //	unsigned int input = 5000000U;
 //	vector<size_t> r_v;
 //	e_v->getDictionary()->search(ColumnBase::gt, r_v, input);
-
+//
 //	map<size_t, size_t> e_row_dict;
 //	vector<size_t>* e_row_id = NULL;
 //	pos_id eid_pos_value = events->lookup_id(r_v, e_sel, 0, e_row_dict, e_row_id);
-
+//
 //	// sensor_type
 //	int s_sel = 2;
 //	col_b = sensors->getColumns()->at(2);
@@ -249,7 +250,7 @@ int main(void) {
 	map<size_t, size_t> e_row_dict;
 	vector<size_t>* e_row_id = NULL;
 	pos_id eid_pos_value = events->lookup_id(r_v, e_sel, 0, e_row_dict, e_row_id);
-
+	map<size_t, size_t>::iterator ita;
 	// select all sensors
 	map<size_t, size_t> s_row_dict3;
 	vector<size_t>* s_row_id3 = NULL;
@@ -257,24 +258,27 @@ int main(void) {
 	// translation for envents to sensors
 	pos_id translation_table_evs = create_tranlation_table(eid_pos_value, s3_pos_value);
 	print_translation_table(translation_table_evs);
-
 	// join to entities
 	map<size_t, size_t> set_row_dict;
 	vector<size_t>* set_row_id = NULL;
-	pos_id etid_pos_value = sensors->select_all(1, set_row_dict, set_row_id);
+	pos_id sensors_pos_value = sensors->select_all(1, set_row_dict, set_row_id);
 	// select entities
-	e_sel = 2;
+	e_sel = 1;
 	col_b = entities->getColumns()->at(e_sel);
 	Column<string>* et_name = (Column<string>*) col_b;
-	string name = "Ball 1";
+	string name = "Referee";
 	vector<size_t> r_et;
 	et_name->getDictionary()->search(ColumnBase::equal, r_et, name);
+	cout << r_et.size() << endl;
 	map<size_t, size_t> et_row_dict3;
 	vector<size_t>* et_row_id3 = NULL;
 	pos_id et_pos_value = entities->lookup_id(r_et, e_sel, 0, et_row_dict3, et_row_id3);
-	pos_id translation_table_set = create_tranlation_table(etid_pos_value, et_pos_value);
+
+	pos_id translation_table_set = create_tranlation_table(sensors_pos_value, et_pos_value);
+
 	print_translation_table(translation_table_set);
-	print_query_result_mul(e_row_dict, translation_table_evs, translation_table_set, limit);
+
+//	print_query_result_mul(e_row_dict, translation_table_evs, translation_table_set, limit);
 
 	return 0;
 }

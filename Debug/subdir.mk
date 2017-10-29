@@ -14,6 +14,15 @@ CPP_SRCS += \
 C_SRCS += \
 ../PackedArray.c 
 
+O_SRCS += \
+../Column.o \
+../ColumnBase.o \
+../Dictionary.o \
+../PackedArray.o \
+../Table.o \
+../main.o \
+../utils.o 
+
 OBJS += \
 ./Column.o \
 ./ColumnBase.o \
@@ -39,7 +48,7 @@ C_DEPS += \
 %.o: ../%.cpp
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ -I/home/alex/workspacec/sql-parser -O0 -g3 -Wall -c -fmessage-length=0 -std=c++11 -lsqlparser -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)" -o "$@" "$<"
+	g++ -I/home/alex/workspacec/sql-parser -O0 -g3 -Wall -c -fmessage-length=0 -std=c++11 -l/usr/local/Cellar/boost/1.65.1/include -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
