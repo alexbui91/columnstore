@@ -1,5 +1,5 @@
 Column.o: ../Column.cpp ../Column.h ../ColumnBase.h ../Dictionary.h \
-  ../PackedArray.h
+ ../PackedArray.h
 
 ../Column.h:
 

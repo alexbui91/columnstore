@@ -8,6 +8,11 @@
 #ifndef TABLE_H_
 #define TABLE_H_
 
+#include<iostream>
+#include<thread>
+#include<mutex>
+#include<chrono>
+
 #include <string>
 
 #include <boost/bimap.hpp>
@@ -190,7 +195,7 @@ public:
 			length = row;
 		}
 		infile.close();
-//		processColumn();
+		processColumn();
 	}
 	void processColumn(bool is_lossy = false) {
 		// update vector value using bulk insert
@@ -224,10 +229,11 @@ public:
 		}
 	}
 
-	pos_id select_all(int i, map<size_t, size_t>& row_dict, vector<size_t>* rowids = NULL) {
+	pos_id select_all(int i, map<size_t, size_t>& row_dict, vector<size_t>* rowids) {
 		Column<unsigned int>* rid = (Column<unsigned int>*) this->columns->at(
 				i);
-		rowids = new vector<size_t>();
+//
+//		rowids = new vector<size_t>();
 		size_t index = -1;
 		// first dimension translation table
 		unsigned int value = 0U;
@@ -238,10 +244,10 @@ public:
 			// position in dictionary
 			index = rid->lookup_packed(i);
 			// actual value
-			row_dict[i] = *(*rid).getDictionary()->lookup(index);
+			row_dict[i] = index;
 			it = tmp_dict.left.find(index);
 			if (it == tmp_dict.left.end()) {
-				value = row_dict[i];
+				value = *(*rid).getDictionary()->lookup(index);
 				if(value != NULL){
 					tmp_dict.insert(position(index, value));
 				}
@@ -255,16 +261,14 @@ public:
 	// i, rid is id column or join column
 	// map_idx_idx is a map its key is row id and value is dictionary pos
 	// return a map of <dict_pos, dict_actual_value>
-	pos_id lookup_id(vector<size_t>& input, int c, int i, map<size_t, size_t>& row_dict, vector<size_t>* rowids = NULL) {
+	pos_id lookup_id(vector<size_t>& input, int c, int i, map<size_t, size_t>& row_dict, vector<size_t>* rowids) {
 		Column<unsigned int>* rid = (Column<unsigned int>*) this->columns->at(
 				i);
 		Column<unsigned int>* col = (Column<unsigned int>*) this->columns->at(
 				c);
 		// row_ids of selection results
-		if(rowids == NULL){
-			rowids = col->lookup_rowid(length, input);
-		}
-		cout << "length of rowids " << rowids -> size() << endl;
+		col->lookup_rowid(length, input, rowids);
+//		cout << "length of rowids " << rowids -> size() << endl;
 		// create map of dict_pos vs dict_actual_value
 //		map<size_t, unsigned int>* tmp_dict = new map<size_t, unsigned int>();
 		pos_id tmp_dict;
@@ -285,14 +289,87 @@ public:
 					tmp_dict.insert(position(index, value));
 				}
 			}
-//			if(tmp_dict->find(index) == tmp_dict->end()){
-//				(*tmp_dict)[index] = *rid->getDictionary()->lookup(index);
-//			}
 		}
-//		cout << "size of dictionary " << tmp_dict->size();
 		return tmp_dict;
 	}
 
+	void lookup_rowid_master(size_t length, Column<unsigned int>* col, vector<size_t>& lookup_result, vector<size_t> *rowids, int no_of_slave=4) {
+		mutex mtx;
+		size_t length_of_slave = length / no_of_slave;
+		size_t from = 0;
+		size_t to = 0;
+		vector<thread> list_thread;
+		bool isSorted = col->getDictionary()->getIsSorted();
+		vector<size_t> pos;
+		for(int i = 0; i < length; i++){
+			pos.push_back(col->lookup_packed(i));
+		}
+		for(int i = 0; i < no_of_slave; i++){
+			from = i * length_of_slave;
+			if(i < (no_of_slave - 1)){
+				to = from + length_of_slave;
+			}else{
+				to = length;
+			}
+
+			list_thread.push_back(thread(Column<unsigned int>::lookup_rowid_slave, mtx, pos, isSorted, length, lookup_result, rowids, from, to));
+		}
+		for(int i = 0; i < no_of_slave; i++){
+			list_thread.at(i).join();
+		}
+	}
+
+	string get_data_by_row(size_t j, int length = 20){
+		string tmp = "";
+		string tmp2 = "";
+		if (this->is_table_exist()) {
+			tmp.append("|");
+			for(size_t i = 0; i < this->columns->size(); i++){
+				switch (col_type->at(i)) {
+				case ColumnBase::uIntType: {
+					Column<unsigned int>* col =
+							(Column<unsigned int>*) this->columns->at(i);
+					tmp2 = to_string(*col->getDictionary()->lookup(col->getVecValue()->at(j)));
+					pad_string(tmp2, length);
+					tmp.append(tmp2);
+					break;
+				}
+				case ColumnBase::intType: {
+					Column<int>* col = (Column<int>*) this->columns->at(i);
+					tmp2 = to_string(*col->getDictionary()->lookup(col->getVecValue()->at(j)));
+					pad_string(tmp2, length);
+					tmp.append(tmp2);
+					break;
+				}
+				case ColumnBase::llType: {
+					Column<bigint>* col = (Column<bigint>*) this->columns->at(i);
+					tmp2 = to_string(*col->getDictionary()->lookup(col->getVecValue()->at(j)));
+					pad_string(tmp2, length);
+					tmp.append(tmp2);
+					break;
+				}
+				default:
+					Column<string>* col = (Column<string>*) this->columns->at(i);
+					tmp2 = *col->getDictionary()-> lookup(col->getVecValue()->at(j));
+					pad_string(tmp2, length);
+					tmp.append(tmp2);
+					break;
+				}
+			}
+		}
+		return tmp;
+	}
+	void pad_string(string &tmp2, int length){
+		int size = tmp2.size();
+		if(size < length){
+			size = length - size;
+		}
+		if(size != 0){
+			for(int i = 0; i < size; i++){
+				tmp2.append(" ");
+			}
+		}
+	}
 	void print_table(int limit) {
 		cout << "Print table data " << this->getName() << endl;
 		if (this->is_table_exist()) {

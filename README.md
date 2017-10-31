@@ -14,3 +14,7 @@ How to build and run this code
 - Run (maybe use run file contained):
   $ ./assignment2
   
+  
+  https://cmake.org/install/
+
+  https://github.com/amyJin/SQLParser

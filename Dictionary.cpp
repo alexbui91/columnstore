@@ -125,7 +125,6 @@ void Dictionary<T>::search(ColumnBase::OP_TYPE opType, vector<size_t>& result, T
 		// search with sorted option
 		// find the lower bound for value in vector
 		typename vector<T>::iterator lower;
-		cout << value;
 		lower = std::lower_bound(items->begin(), items->end(), value,
 				smaller<T>);
 

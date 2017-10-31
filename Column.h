@@ -8,6 +8,11 @@
 #ifndef SRC_COLUMN_H_
 #define SRC_COLUMN_H_
 
+#include<iostream>
+#include<thread>
+#include<mutex>
+#include<chrono>
+
 #include "ColumnBase.h"
 #include "Dictionary.h"
 #include "PackedArray.h"
@@ -116,17 +121,48 @@ public:
 		vecValue->resize(0);
 	}
 	// look up row_id that fits to condition_result
-	vector<size_t>* lookup_rowid(size_t length, vector<size_t>& lookup_result) {
-		vector<size_t>* results = new vector<size_t>();
+	void lookup_rowid(size_t length, vector<size_t>& lookup_result, vector<size_t> *rowids) {
 		size_t pos = -1;
+//		clock_t t1;
 		for(size_t i = 0; i < length; i++){
+//			t1 = clock();
 			pos = lookup_packed(i);
-			if(pos != -1 && find(lookup_result.begin(), lookup_result.end(), pos) != lookup_result.end()){
-				results->push_back(i);
+			if(this->getDictionary()->getIsSorted()){
+				if(pos != -1 && binary_search(lookup_result.begin(), lookup_result.end(), pos)){
+					rowids->push_back(i);
+				}
+			}else if(pos != -1 && find(lookup_result.begin(), lookup_result.end(), pos) != lookup_result.end()){
+				rowids->push_back(i);
+			}
+//			cout << "one step cost: " << (float) clock() - (float) t1 << endl;
+//			break;
+		}
+	}
+
+
+	// try master and slave
+
+	static void lookup_rowid_slave(mutex& mtx, vector<size_t>& pos, bool isSorted, size_t length, vector<size_t>& lookup_result, vector<size_t> *rowids, size_t from, size_t to){
+		bool flag = false;
+		size_t p = -1;
+		for(size_t i = from; i < to; i++){
+			p = pos.at(i);
+			flag = false;
+			if(isSorted){
+				if(p != -1 && binary_search(lookup_result.begin(), lookup_result.end(), p)){
+					flag = true;
+				}
+			}else if(p != -1 && find(lookup_result.begin(), lookup_result.end(), pos) != lookup_result.end()){
+				flag = true;
+			}
+			if(flag){
+				mtx.lock();
+				rowids->push_back(i);
+				mtx.unlock();
 			}
 		}
-		return results;
 	}
+
 	// return -1 in case of missing
 	size_t lookup_packed(size_t i) {
 		size_t pos = -1;
