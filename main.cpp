@@ -163,8 +163,8 @@ float get_time(clock_t &t){
 }
 int main(void) {
 	int limit = 20;
-	string prefix = "/home/alex/Documents/database/assignment2/raw";
-//	string prefix = "/Users/alex/Documents/workspacecplus/columnstore/data";
+//	string prefix = "/home/alex/Documents/database/assignment2/raw";
+	string prefix = "/Users/alex/Documents/workspacecplus/columnstore/data";
 	clock_t t2;
 	t2 = clock();
 	float memory = getMemory();

@@ -141,6 +141,31 @@ public:
 
 
 	// try master and slave
+	void lookup_rowid_master(size_t length, vector<size_t>& lookup_result, vector<size_t> *rowids, int no_of_slave=4) {
+		mutex mtx;
+		size_t length_of_slave = length / no_of_slave;
+		size_t from = 0;
+		size_t to = 0;
+		vector<thread> list_thread;
+		bool isSorted = this->getDictionary()->getIsSorted();
+		vector<size_t> pos;
+		for(int i = 0; i < length; i++){
+			pos.push_back(this->lookup_packed(i));
+		}
+		for(int i = 0; i < no_of_slave; i++){
+			from = i * length_of_slave;
+			if(i < (no_of_slave - 1)){
+				to = from + length_of_slave;
+			}else{
+				to = length;
+			}
+
+			list_thread.push_back(thread(&Column<unsigned int>::lookup_rowid_slave, this, ref(mtx), ref(pos), ref(isSorted), ref(length), ref(lookup_result), ref(rowids), ref(from), ref(to), i));
+		}
+		for(int i = 0; i < no_of_slave; i++){
+			list_thread.at(i).join();
+		}
+	}
 
 	static void lookup_rowid_slave(mutex& mtx, vector<size_t>& pos, bool isSorted, size_t length, vector<size_t>& lookup_result, vector<size_t> *rowids, size_t from, size_t to){
 		bool flag = false;

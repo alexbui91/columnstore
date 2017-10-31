@@ -267,7 +267,7 @@ public:
 		Column<unsigned int>* col = (Column<unsigned int>*) this->columns->at(
 				c);
 		// row_ids of selection results
-		col->lookup_rowid(length, input, rowids);
+		col->lookup_rowid_master(length, input, rowids);
 //		cout << "length of rowids " << rowids -> size() << endl;
 		// create map of dict_pos vs dict_actual_value
 //		map<size_t, unsigned int>* tmp_dict = new map<size_t, unsigned int>();
@@ -291,32 +291,6 @@ public:
 			}
 		}
 		return tmp_dict;
-	}
-
-	void lookup_rowid_master(size_t length, Column<unsigned int>* col, vector<size_t>& lookup_result, vector<size_t> *rowids, int no_of_slave=4) {
-		mutex mtx;
-		size_t length_of_slave = length / no_of_slave;
-		size_t from = 0;
-		size_t to = 0;
-		vector<thread> list_thread;
-		bool isSorted = col->getDictionary()->getIsSorted();
-		vector<size_t> pos;
-		for(int i = 0; i < length; i++){
-			pos.push_back(col->lookup_packed(i));
-		}
-		for(int i = 0; i < no_of_slave; i++){
-			from = i * length_of_slave;
-			if(i < (no_of_slave - 1)){
-				to = from + length_of_slave;
-			}else{
-				to = length;
-			}
-
-			list_thread.push_back(thread(Column<unsigned int>::lookup_rowid_slave, mtx, pos, isSorted, length, lookup_result, rowids, from, to));
-		}
-		for(int i = 0; i < no_of_slave; i++){
-			list_thread.at(i).join();
-		}
 	}
 
 	string get_data_by_row(size_t j, int length = 20){
