@@ -101,6 +101,11 @@ pos_id create_tranlation_table(pos_id eid_pos_value, pos_id sid_pos_value){
 	return translation_table;
 }
 
+// using master slave in translation step
+void create_translation_table_slave(){
+
+}
+
 void print_translation_table(pos_id translation_table, string mes=""){
 	// print translation table
 	cout << mes << endl;
@@ -163,8 +168,8 @@ float get_time(clock_t &t){
 }
 int main(void) {
 	int limit = 20;
-//	string prefix = "/home/alex/Documents/database/assignment2/raw";
-	string prefix = "/Users/alex/Documents/workspacecplus/columnstore/data";
+	string prefix = "/home/alex/Documents/database/assignment2/raw";
+//	string prefix = "/Users/alex/Documents/workspacecplus/columnstore/data";
 	clock_t t2;
 	t2 = clock();
 	float memory = getMemory();

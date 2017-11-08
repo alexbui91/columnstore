@@ -55,7 +55,9 @@ public:
 	}
 
 	T* lookup(size_t index);
-
+	vector<T>* getItems(){
+		return items;
+	}
 	size_t addItem(T& value, vector<size_t>* vecValue, bool sorted, bool bulkInsert);
 	size_t size();
 	void setIsSorted(bool sorted);
