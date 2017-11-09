@@ -70,6 +70,15 @@ public:
 	void setName(string &nameValue) {
 		name = nameValue;
 	}
+	ColumnBase* getColumnByName(string colName) {
+		//int tupleSize = tuple_size<decltype(columns)>::value;;
+		for (size_t i = 0; i < columns->size(); i++) {
+			ColumnBase* column = columns->at(i);
+			if (column->getName() == colName)
+				return column;
+		}
+		return NULL;
+	}
 	//build structure without using lossy compression
 	void build_structure(string path) {
 		this->build_structure(path, false);
@@ -335,28 +344,28 @@ public:
 				case ColumnBase::uIntType: {
 					Column<unsigned int>* col =
 							(Column<unsigned int>*) this->columns->at(i);
-					tmp2 = to_string(*col->getDictionary()->lookup(col->getVecValue()->at(j)));
+					tmp2 = to_string(*col->getDictionary()->lookup(col->lookup_packed(j)));
 					pad_string(tmp2, length);
 					tmp.append(tmp2);
 					break;
 				}
 				case ColumnBase::intType: {
 					Column<int>* col = (Column<int>*) this->columns->at(i);
-					tmp2 = to_string(*col->getDictionary()->lookup(col->getVecValue()->at(j)));
+					tmp2 = to_string(*col->getDictionary()->lookup(col->lookup_packed(j)));
 					pad_string(tmp2, length);
 					tmp.append(tmp2);
 					break;
 				}
 				case ColumnBase::llType: {
 					Column<bigint>* col = (Column<bigint>*) this->columns->at(i);
-					tmp2 = to_string(*col->getDictionary()->lookup(col->getVecValue()->at(j)));
+					tmp2 = to_string(*col->getDictionary()->lookup(col->lookup_packed(j)));
 					pad_string(tmp2, length);
 					tmp.append(tmp2);
 					break;
 				}
 				default:
 					Column<string>* col = (Column<string>*) this->columns->at(i);
-					tmp2 = *col->getDictionary()-> lookup(col->getVecValue()->at(j));
+					tmp2 = *col->getDictionary()-> lookup(col->lookup_packed(j));
 					pad_string(tmp2, length);
 					tmp.append(tmp2);
 					break;

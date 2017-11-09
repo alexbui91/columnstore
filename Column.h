@@ -120,6 +120,63 @@ public:
 		// free space vecValue
 		vecValue->resize(0);
 	}
+
+	bool selection(T& searchValue, ColumnBase::OP_TYPE q_where_op,
+						vector<bool>* q_resultRid, bool initQueryResult = false) {
+		vector<size_t> result;
+		this->getDictionary()->search(q_where_op, result, searchValue);
+		// find rowId with appropriate dictionary position
+		for (size_t rowId = 0; !result.empty() && rowId < packed->count; rowId++) {
+			size_t dictPosition = this->lookup_packed(rowId);
+			if ((ColumnBase::is_contain_op(q_where_op) && dictPosition >= result.front() && dictPosition <= result.back())) {
+				// first where expr => used to init query result
+				if (initQueryResult)
+					q_resultRid->push_back(true); //rowId is in query result
+				else {
+					if (!q_resultRid->at(rowId)) {
+						q_resultRid->at(rowId) = true;
+					}
+				}
+			}
+			else {
+				// rowId is not in query result
+				if(initQueryResult)
+					q_resultRid->push_back(false);
+				else
+					q_resultRid->at(rowId) = false;
+			}
+		}
+		return true;
+	}
+
+	vector<T> projection(vector<bool>* q_resultRid, size_t limit, size_t& limitCount) {
+		vector<T> outputs; // output result
+		limitCount = 0; // reset limit count
+		for (size_t rid = 0; rid < q_resultRid->size(); rid++) {
+			if (q_resultRid->at(rid)) {
+				size_t encodeValue = this->lookup_packed(rid);
+				T* a = this->getDictionary()->lookup(encodeValue);
+				outputs.push_back(*a);
+				if (++limitCount >= limit) break;
+			}
+		}
+
+		return outputs;
+	}
+
+	vector<T> projection(vector<int>* q_resultRid, size_t limit, size_t& limitCount) {
+		vector<T> outputs; // output result
+		limitCount = 0; // reset limit count
+		for (size_t i = 0; i < q_resultRid->size(); i++) {
+			size_t encodeValue = this->lookup_result(q_resultRid->at(i));
+			T* a = this->getDictionary()->lookup(encodeValue);
+			outputs.push_back(*a);
+			if (++limitCount >= limit) break;
+		}
+
+		return outputs;
+	}
+
 	// look up row_id that fits to condition_result
 	void lookup_rowid(size_t length, vector<size_t>& lookup_result, vector<size_t> *rowids) {
 		size_t pos = -1;

@@ -6,12 +6,16 @@
 
 #include <boost/bimap.hpp>
 
+#include "sql/SQLParser.h"
+#include "sql/util/sqlhelper.h"
+
 #include "string.h"
 
 #include "Table.h"
 #include "Dictionary.h"
 #include "Column.h"
 #include "ColumnBase.h"
+#include "Expr.h"
 
 using namespace std;
 
@@ -82,6 +86,10 @@ float getMemory() { //Note: this value is in KB!
 		result = result / 1024;
 	}
 	return result;
+}
+
+float get_time(clock_t &t){
+	return ((float) clock() - (float) t) / CLOCKS_PER_SEC;
 }
 
 // create a translation table
@@ -163,35 +171,161 @@ void print_query_result(Table* table, map<size_t, size_t> e_row_dict, pos_id tra
 	cout << "Total records avalable: " << i << endl;
 }
 
-float get_time(clock_t &t){
-	return ((float) clock() - (float) t) / CLOCKS_PER_SEC;
+// execute select query after parse
+
+vector<bool>* execute_select(Table* table, vector<Expr*>* list_expr){
+	vector<bool>* q_resultRid = new vector<bool>();
+	string q_where_value;
+	Expr* e;
+	bool initQueryResult = false;
+	for (size_t i = 0; i < list_expr->size(); i++) {
+		e = list_expr->at(i);
+		ColumnBase::OP_TYPE q_where_op = e->getOp();
+		q_where_value = e->getVal();
+		// get column by name then cast to appropriate column based on column type
+		ColumnBase* colBase = table->getColumnByName(e->getField());
+		initQueryResult = (i == 0);
+		if (colBase == NULL) continue;
+		if(colBase->getType() == ColumnBase::COLUMN_TYPE::intType){
+			Column<int>* t = (Column<int>*) colBase;
+			int searchValue = 0;
+			try {
+				searchValue = stoi(q_where_value);
+			} catch (exception& e) {
+				cerr << "Exception: " << e.what() << endl;
+			}
+			t->selection(searchValue, q_where_op, q_resultRid, initQueryResult);
+		}else if(colBase->getType() == ColumnBase::COLUMN_TYPE::uIntType){
+			Column<unsigned int>* t = (Column<unsigned int>*) colBase;
+			unsigned int searchValue = 0U;
+			try {
+				searchValue = stoi(q_where_value);
+			} catch (exception& e) {
+				cerr << "Exception: " << e.what() << endl;
+			}
+			t->selection(searchValue, q_where_op, q_resultRid, initQueryResult);
+		}else if(colBase->getType() == ColumnBase::COLUMN_TYPE::llType){
+			Column<bigint>* t = (Column<bigint>*) colBase;
+			bigint searchValue = 0ll;
+			try {
+				searchValue = stoll(q_where_value);
+			} catch (exception& e) {
+				cerr << "Exception: " << e.what() << endl;
+			}
+		}else{
+			Column<string>* t = (Column<string>*) colBase;
+			string searchValue = q_where_value;
+			t->selection(searchValue, q_where_op, q_resultRid, initQueryResult);
+		}
+	}
+
+	return q_resultRid;
+}
+/* get total row of query result */
+size_t get_total_count(vector<bool>* q_resultRid){
+	size_t totalResult = 0;
+	for (size_t rid = 0; rid < q_resultRid->size(); rid++) {
+		if (q_resultRid->at(rid))
+			++totalResult;
+	}
+	return totalResult;
+}
+
+Expr* add_reg_ops(hsql::Expr* expr){
+	string ename = expr->expr->getName();
+	ColumnBase::OP_TYPE op;
+	if (expr->opType == hsql::OperatorType::kOpGreater) {
+		op = ColumnBase::OP_TYPE::gt;
+	}else if(expr->opType == hsql::OperatorType::kOpGreaterEq){
+		op = ColumnBase::OP_TYPE::ge;
+	}else if(expr->opType == hsql::OperatorType::kOpLess){
+		op = ColumnBase::OP_TYPE::lt;
+	}else if(expr->opType == hsql::OperatorType::kOpLessEq){
+		op = ColumnBase::OP_TYPE::le;
+	}else if(expr->opType == hsql::OperatorType::kOpEquals){
+		op = ColumnBase::OP_TYPE::equal;
+	}
+	string val;
+	hsql::ExprType literalType = expr->expr2->type;
+	if (literalType == hsql::ExprType::kExprLiteralInt)
+		val = to_string(expr->expr2->ival);
+	else if (literalType == hsql::ExprType::kExprColumnRef)
+		val = expr->expr2->name;
+	Expr* aexpr = new Expr(val, ename, op);
+	return aexpr;
+}
+
+// parse sql statement
+string parse_sql(const string &query, map<string, Table*>* list_tables, vector<string> &q_select_fields, vector<Expr*>* list_expr){
+	string tname = "";
+	hsql::SQLParserResult result;
+	hsql::SQLParser::parse(query, &result);
+	Expr* n_e;
+	if (result.isValid() && result.size() > 0) {
+		const hsql::SQLStatement* statement = result.getStatement(0);
+		if (statement->isType(hsql::kStmtSelect)) {
+			const hsql::SelectStatement* select = (const hsql::SelectStatement*) statement;
+			tname = select->fromTable->getName();
+			map<string, Table*>::iterator it;
+			it = list_tables->find(tname);
+			vector<bool>* q_resultRid = new vector<bool>();
+			if (it != list_tables->end()){
+				Table* table = it->second;
+				for (hsql::Expr* expr : *select->selectList) {
+					if (expr->type == hsql::ExprType::kExprStar) {
+						for (ColumnBase* colBase : *table->getColumns()) {
+							q_select_fields.push_back(colBase->getName());
+						}
+					}
+				}
+				if (select->whereClause != NULL) {
+					hsql::Expr* expr = select->whereClause;
+					if (expr->type == hsql::ExprType::kExprOperator) {
+						if (expr->opType == hsql::OperatorType::kOpAnd){
+							n_e = add_reg_ops(expr->expr);
+							list_expr->push_back(n_e);
+							if (expr->expr2 != nullptr) {
+								n_e = add_reg_ops(expr->expr2);
+								list_expr->push_back(n_e);
+							} else if (expr->exprList != nullptr) {
+								for (hsql::Expr* e : *expr->exprList) {
+									n_e = add_reg_ops(e);
+									list_expr->push_back(n_e);
+								}
+							}
+						} else{
+							n_e = add_reg_ops(expr);
+							list_expr->push_back(n_e);
+						}
+					}
+				}
+			}
+
+		}
+	}else {
+		fprintf(stderr, "%s (L%d:%d)\n", result.errorMsg(),
+				result.errorLine(), result.errorColumn());
+	}
+//	delete n_e;
+	return tname;
 }
 int main(void) {
-	int limit = 20;
-	string prefix = "/home/alex/Documents/database/assignment2/raw";
+	const string prefix = "/home/alex/Documents/database/assignment2/raw";
 //	string prefix = "/Users/alex/Documents/workspacecplus/columnstore/data";
 	clock_t t2;
 	t2 = clock();
 	float memory = getMemory();
 	cout << "Memory status at the starting point: " << memory << "Mb" << endl;
 
-	const string query1 =
-			"SELECT * from events JOIN sensors ON events.sid = sensors.sid";
-	const string query2 =
-			"SELECT * from events JOIN sensors ON events.sid = sensors.sid WHERE sensors.type = 1 AND events.v < 1000000";
-	const string query3 =
-			"SELECT * from events JOIN sensors ON events.sid = sensors.sid JOIN entities ON entities.eid = sensors.eid WHERE entities.name = \"Ball 1\" AND events.v < 1000000";
-
-//	hsql::SQLParserResult result;
-//	hsql::SQLParser::parse(query1, &result);
+	const string query1 = "SELECT * from events where events.sid = 40";
+	const string query2 = "SELECT * from events where events.v > 5000000";
+	const string query3 = "SELECT * from events where events.ts > 1000000000000000 and events.ts = 12100000000000000";
 
 	string entity_path = prefix + "/sample-game.csv";
 	string sensors_path = prefix + "/sensors.csv";
 	string entities_path = prefix + "/entities.csv";
 
 	// init column name
-	vector<string> entity_name = { "eid", "name", "type"};
-	vector<string> sensor_name = { "sid", "eid", "type" };
 	vector<string> events_name = { "sid", "ts", "x", "y", "z", "v", "a", "vx",
 			"vy", "vz", "ax", "ay", "az" };
 
@@ -201,148 +335,26 @@ int main(void) {
 			ColumnBase::intType, ColumnBase::uIntType, ColumnBase::uIntType,
 			ColumnBase::intType, ColumnBase::intType, ColumnBase::intType,
 			ColumnBase::intType, ColumnBase::intType, ColumnBase::intType };
-	vector<ColumnBase::COLUMN_TYPE> sensor_type = { ColumnBase::uIntType,
-			ColumnBase::uIntType, ColumnBase::uIntType };
-	vector<ColumnBase::COLUMN_TYPE> entity_type = { ColumnBase::uIntType,
-			ColumnBase::varcharType, ColumnBase::uIntType };
-
-	Table* entities = new Table("enities", &entity_type, &entity_name);
-	entities->build_structure(entities_path);
-	Table* sensors = new Table("sensors", &sensor_type, &sensor_name);
-	sensors->build_structure(sensors_path);
+	map<string, Table*>* list_tables = new map<string, Table*>();
 	Table* events = new Table("events", &events_type, &events_name);
 	events->build_structure(entity_path);
-	float memory2 = getMemory();
-	cout << "Memory status after loading data: " << memory2 << "Mb" << endl
-		 << "Consumption amount: " << memory2 - memory << "Mb"<< endl;
-	memory = memory2;
-
-	cout << "Loading time: " << get_time(t2) << "s" << endl;
-	t2 = clock();
-	// query 1
-	cout << "execute query 1" << endl;
-	map<size_t, size_t> e_row_dict1;
-	vector<size_t>* e_row_id1 = new vector<size_t>();
-	pos_id e1_pos_value = events->select_all(0, e_row_dict1, e_row_id1);
-
-	map<size_t, size_t> s_row_dict1;
-	vector<size_t>* s_row_id1 = new vector<size_t>();
-	pos_id s1_pos_value = sensors->select_all(0, s_row_dict1, s_row_id1);
-	pos_id translation_table1 = create_tranlation_table(e1_pos_value, s1_pos_value);
-//	print_translation_table(translation_table1, "translation from events to sensors");
-	print_query_result(events, e_row_dict1, translation_table1, limit);
-	memory2 = getMemory();
-	cout << "Running time of query 1: " << get_time(t2) << "s" << endl;
-	cout << "Memory status after running query 1: " << memory2 << "Mb" << endl
-			 << "Consumption amount: " << memory2 - memory << "Mb"<< endl;
-	memory = memory2;
-	// query 2
-	t2 = clock();
-	cout << "execute query 2" << endl;
-	// if search => need to look up
-	int e_sel = 5;
-	ColumnBase* col_b = events->getColumns()->at(e_sel);
-	Column<unsigned int>* e_v = (Column<unsigned int>*) col_b;
-	unsigned int input = 1000000U;
-	vector<size_t> r_v;
-	e_v->getDictionary()->search(ColumnBase::lt, r_v, input);
-
-	map<size_t, size_t> e_row_dict;
-	vector<size_t>* e_row_id = new vector<size_t>();
-	pos_id eid_pos_value = events->lookup_id(r_v, e_sel, 0, e_row_dict, e_row_id);
-
-	// sensor_type
-	int s_sel = 2;
-	col_b = sensors->getColumns()->at(2);
-	Column<unsigned int>* s_type = (Column<unsigned int>*) col_b;
-	vector<size_t> r_t;
-	input = 1U;
-	s_type->getDictionary()->search(ColumnBase::equal, r_t, input);
-
-	t2 = clock();
-	// map from row id to dict position on sid
-	map<size_t, size_t> s_row_dict;
-	vector<size_t>* s_row_id = new vector<size_t>();
-	pos_id sid_pos_value = sensors->lookup_id(r_t, s_sel, 0, s_row_dict, s_row_id);
-
-	//iterate a look up b
-	//create translation table
-	pos_id translation_table = create_tranlation_table(eid_pos_value, sid_pos_value);
-//	print_translation_table(translation_table, "translation from events to sensors");
-	// final result of query
-	// loop a rowid dict pos then find in translation table dictionary pos of b
-	print_query_result(events, e_row_dict, translation_table, limit);
-
-	memory2 = getMemory();
-	cout << "Running time of query 2: " << get_time(t2) << "s" << endl;
-	cout << "Memory status after running query 2: " << memory2 << "Mb" << endl
-			 << "Consumption amount: " << memory2 - memory << "Mb"<< endl;
-	memory = memory2;
-	// query 3
-	t2 = clock();
-	cout << "execute query 3" << endl;
-	// selection in events
-//	int e_sel = 5;
-//	ColumnBase* col_b = events->getColumns()->at(e_sel);
-//	Column<unsigned int>* e_v = (Column<unsigned int>*) col_b;
-//	unsigned int input = 1000000U;
-//	vector<size_t> r_v;
-//	e_v->getDictionary()->search(ColumnBase::lt, r_v, input);
-//
-//	map<size_t, size_t> e_row_dict;
-//	vector<size_t>* e_row_id = new vector<size_t>();
-//	pos_id eid_pos_value = events->lookup_id(r_v, e_sel, 0, e_row_dict, e_row_id);
-	// select all sensors
-	map<size_t, size_t> s_row_dict3;
-	//values look up condition from sensors
-	vector<size_t>* s_row_id3 = new vector<size_t>();
-	pos_id s3_pos_value = sensors->select_all(0, s_row_dict3, s_row_id3);
-
-	// join to entities
-	map<size_t, size_t> set_row_dict;
-	vector<size_t>* set_row_id = new vector<size_t>();
-	pos_id sensors_pos_value = sensors->select_all(1, set_row_dict, set_row_id);
-	// select entities
-	e_sel = 1;
-	col_b = entities->getColumns()->at(e_sel);
-	Column<string>* et_name = (Column<string>*) col_b;
-	string name = "Ball 1";
-	vector<size_t> r_et;
-	et_name->getDictionary()->search(ColumnBase::equal, r_et, name);
-	cout << r_et.size() << endl;
-	map<size_t, size_t> et_row_dict3;
-	vector<size_t>* et_row_id3 = new vector<size_t>();
-	pos_id et_pos_value = entities->lookup_id(r_et, e_sel, 0, et_row_dict3, et_row_id3);
-	pos_id translation_table_set = create_tranlation_table(sensors_pos_value, et_pos_value);
-
-//	print_translation_table(translation_table_set, "translation table from sensors to entities");
-
-	// get sid after join with entities
-	pos_id::left_const_iterator itb;
-	map<size_t, size_t>::iterator ita;
-	s_row_id3->resize(0);
-	for (ita = set_row_dict.begin(); ita != set_row_dict.end(); ita++) {
-		itb = translation_table_set.left.find(ita->second);
-		if (itb != translation_table_set.left.end()) {
-			// find row id in b
-//			cout << ita->first << "||" << ita->second << " on: " << itb->first << endl;
-			s_row_id3->push_back(ita->first);
-		}
+	list_tables->insert(pair<string, Table*>("events", events));
+	vector<Expr*>* list_expr = new vector<Expr*>();
+	vector<string> q_select_fields;
+	string table_name = parse_sql(query1, list_tables, q_select_fields, list_expr);
+	vector<bool>* q_result;
+	if(!table_name.empty()){
+		q_result = execute_select(events, list_expr);
+		cout << q_result->size() << endl;
 	}
-	// relook up sensors with join value from entities
-	vector<size_t> a;
-	s_row_dict3.clear();
-	s3_pos_value = sensors->lookup_id(a, 0, 0, s_row_dict3, s_row_id3);
-	print_translation_table(s3_pos_value, "sensors rowid to its remaining actual value");
-	// translation for events to sensors
-	pos_id translation_table_evs = create_tranlation_table(eid_pos_value, s3_pos_value);
-//	print_translation_table(translation_table_evs, "final translation table from sensors to entities");
+	list_expr->clear();
+	q_select_fields.clear();
+	table_name = parse_sql(query2, list_tables, q_select_fields, list_expr);
+	// query 3
+	list_expr->clear();
+	q_select_fields.clear();
+	table_name = parse_sql(query3, list_tables, q_select_fields, list_expr);
+	// parse a given query
 
-	print_query_result(events, e_row_dict, translation_table_evs, limit);
-
-	memory2 = getMemory();
-	cout << "Running time of query 3: " << get_time(t2) << "s" << endl;
-	cout << "Memory status after running query 3: " << memory2 << "Mb"<< endl
-			 << "Consumption amount: " << memory2 - memory << "Mb"<< endl;
 	return 0;
 }

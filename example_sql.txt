@@ -1,0 +1,18 @@
+Memory status at the starting point: 1.88281Mb
+SelectStatement
+	Fields:
+		*
+	Sources:
+		events
+	Search Conditions:
+		AND
+			13
+				ts
+					Table:
+						events
+				1000000000000000  
+			11
+				ts
+					Table:
+						events
+				12100000000000000  

@@ -26,7 +26,13 @@ public:
 	string getName();
 	void setName(string nameValue);
 	COLUMN_TYPE getType();
-	void setType(ColumnBase::COLUMN_TYPE typeValue);
+	void setType(COLUMN_TYPE typeValue);
+	static bool is_contain_op(OP_TYPE op){
+		if(op >= OP_TYPE::equal && op <= OP_TYPE::rangeEQ){
+			return true;
+		}
+		return false;
+	}
 };
 
 } /* namespace std */
