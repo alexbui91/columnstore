@@ -15,6 +15,11 @@ How to build and run this code
   $ ./assignment2
   
   
-  https://cmake.org/install/
-
-  https://github.com/amyJin/SQLParser
+download latest hyrise/sql-parser
+https://github.com/hyrise/sql-parser
+follow installation instruction
+unzip downloaded file
+$ cd sql-parser
+$ make
+$ make install // it may require root user to perform
+$ make test // to make sure everything go well

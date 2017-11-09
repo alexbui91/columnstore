@@ -120,6 +120,63 @@ public:
 		// free space vecValue
 		vecValue->resize(0);
 	}
+
+	bool selection(T& searchValue, ColumnBase::OP_TYPE q_where_op,
+						vector<bool>* q_resultRid, bool initQueryResult = false) {
+		vector<size_t> result;
+		this->getDictionary()->search(q_where_op, result, searchValue);
+		// find rowId with appropriate dictionary position
+		for (size_t rowId = 0; !result.empty() && rowId < packed->count; rowId++) {
+			size_t dictPosition = this->lookup_packed(rowId);
+			if ((ColumnBase::is_contain_op(q_where_op) && dictPosition >= result.front() && dictPosition <= result.back())) {
+				// first where expr => used to init query result
+				if (initQueryResult)
+					q_resultRid->push_back(true); //rowId is in query result
+				else {
+					if (!q_resultRid->at(rowId)) {
+						q_resultRid->at(rowId) = true;
+					}
+				}
+			}
+			else {
+				// rowId is not in query result
+				if(initQueryResult)
+					q_resultRid->push_back(false);
+				else
+					q_resultRid->at(rowId) = false;
+			}
+		}
+		return true;
+	}
+
+	vector<T> projection(vector<bool>* q_resultRid, size_t limit, size_t& limitCount) {
+		vector<T> outputs; // output result
+		limitCount = 0; // reset limit count
+		for (size_t rid = 0; rid < q_resultRid->size(); rid++) {
+			if (q_resultRid->at(rid)) {
+				size_t encodeValue = this->lookup_packed(rid);
+				T* a = this->getDictionary()->lookup(encodeValue);
+				outputs.push_back(*a);
+				if (++limitCount >= limit) break;
+			}
+		}
+
+		return outputs;
+	}
+
+	vector<T> projection(vector<int>* q_resultRid, size_t limit, size_t& limitCount) {
+		vector<T> outputs; // output result
+		limitCount = 0; // reset limit count
+		for (size_t i = 0; i < q_resultRid->size(); i++) {
+			size_t encodeValue = this->lookup_result(q_resultRid->at(i));
+			T* a = this->getDictionary()->lookup(encodeValue);
+			outputs.push_back(*a);
+			if (++limitCount >= limit) break;
+		}
+
+		return outputs;
+	}
+
 	// look up row_id that fits to condition_result
 	void lookup_rowid(size_t length, vector<size_t>& lookup_result, vector<size_t> *rowids) {
 		size_t pos = -1;
@@ -141,48 +198,76 @@ public:
 
 
 	// try master and slave
-	void lookup_rowid_master(size_t length, vector<size_t>& lookup_result, vector<size_t> *rowids, int no_of_slave=4) {
+	void lookup_rowid_master(size_t length, vector<size_t>& lookup_result, vector<size_t> *rowids) {
+		int no_of_slave = 4;
 		mutex mtx;
 		size_t length_of_slave = length / no_of_slave;
 		size_t from = 0;
 		size_t to = 0;
 		vector<thread> list_thread;
 		bool isSorted = this->getDictionary()->getIsSorted();
-		vector<size_t> pos;
-		for(int i = 0; i < length; i++){
-			pos.push_back(this->lookup_packed(i));
-		}
-		for(int i = 0; i < no_of_slave; i++){
-			from = i * length_of_slave;
-			if(i < (no_of_slave - 1)){
-				to = from + length_of_slave;
-			}else{
-				to = length;
-			}
 
-			list_thread.push_back(thread(&Column<unsigned int>::lookup_rowid_slave, this, ref(mtx), ref(pos), ref(isSorted), ref(length), ref(lookup_result), ref(rowids), ref(from), ref(to), i));
+		vector<size_t> pos1;
+		from = 0;
+		to = length_of_slave;
+		for(int i = from; i < to; i++){
+			pos1.push_back(this->lookup_packed(i));
 		}
+		vector<size_t> tmp_id1;
+		list_thread.push_back(thread(&Column<T>::lookup_rowid_slave, ref(mtx), ref(pos1), isSorted, ref(lookup_result), ref(tmp_id1), from, to));
+		from = to;
+		to = length_of_slave + from;
+		vector<size_t> pos2;
+		for(int i = from; i < to; i++){
+		    pos2.push_back(this->lookup_packed(i));
+		}
+		vector<size_t> tmp_id2;
+		list_thread.push_back(thread(&Column<T>::lookup_rowid_slave, ref(mtx), ref(pos2), isSorted, ref(lookup_result), ref(tmp_id2), from, to));
+		from = to;
+		to = length_of_slave + from;
+		vector<size_t> pos3;
+		for(int i = from; i < to; i++){
+		    pos3.push_back(this->lookup_packed(i));
+		}
+		vector<size_t> tmp_id3;
+		vector<size_t> pos4;
+		list_thread.push_back(thread(&Column<T>::lookup_rowid_slave, ref(mtx), ref(pos3), isSorted, ref(lookup_result), ref(tmp_id3), from, to));
+		from = to;
+		to = length;
+		for(int i = from; i < to; i++){
+		    pos4.push_back(this->lookup_packed(i));
+		}
+		vector<size_t> tmp_id4;
+		list_thread.push_back(thread(&Column<T>::lookup_rowid_slave, ref(mtx), ref(pos4), isSorted, ref(lookup_result), ref(tmp_id4), from, to));
+
 		for(int i = 0; i < no_of_slave; i++){
 			list_thread.at(i).join();
 		}
+//		cout << "l: " << tmp_id1.size() << "||" << tmp_id2.size() << "||" << tmp_id3.size() << "||" << tmp_id4.size() << "||" << endl;
+		rowids->insert(rowids->end(), tmp_id1.begin(), tmp_id1.end());
+		rowids->insert(rowids->end(), tmp_id2.begin(), tmp_id2.end());
+		rowids->insert(rowids->end(), tmp_id3.begin(), tmp_id3.end());
+		rowids->insert(rowids->end(), tmp_id4.begin(), tmp_id4.end());
 	}
 
-	static void lookup_rowid_slave(mutex& mtx, vector<size_t>& pos, bool isSorted, size_t length, vector<size_t>& lookup_result, vector<size_t> *rowids, size_t from, size_t to){
+	static void lookup_rowid_slave(mutex& mtx, vector<size_t>& pos, bool isSorted, vector<size_t>& lookup_result, vector<size_t> &rowids, size_t from, size_t to){
 		bool flag = false;
 		size_t p = -1;
-		for(size_t i = from; i < to; i++){
+		cout << pos.size() << endl;
+		size_t length = to - from;
+		for(size_t i = 0; i < length; i++){
 			p = pos.at(i);
 			flag = false;
 			if(isSorted){
 				if(p != -1 && binary_search(lookup_result.begin(), lookup_result.end(), p)){
 					flag = true;
 				}
-			}else if(p != -1 && find(lookup_result.begin(), lookup_result.end(), pos) != lookup_result.end()){
+			}else if(p != -1 && find(lookup_result.begin(), lookup_result.end(), p) != lookup_result.end()){
 				flag = true;
 			}
 			if(flag){
 				mtx.lock();
-				rowids->push_back(i);
+				rowids.push_back(from + i);
 				mtx.unlock();
 			}
 		}

@@ -31,6 +31,7 @@ typedef boost::bimap<size_t, size_t> map_idx_idx;
 typedef pos_id::value_type position;
 typedef map_idx_idx::value_type idx2pos;
 
+
 class Table {
 private:
 	string name;
@@ -68,6 +69,15 @@ public:
 	}
 	void setName(string &nameValue) {
 		name = nameValue;
+	}
+	ColumnBase* getColumnByName(string colName) {
+		//int tupleSize = tuple_size<decltype(columns)>::value;;
+		for (size_t i = 0; i < columns->size(); i++) {
+			ColumnBase* column = columns->at(i);
+			if (column->getName() == colName)
+				return column;
+		}
+		return NULL;
 	}
 	//build structure without using lossy compression
 	void build_structure(string path) {
@@ -293,6 +303,37 @@ public:
 		return tmp_dict;
 	}
 
+//	pos_id lookup_id_master(vector<size_t>& input, int c, int i, map<size_t, size_t>& row_dict, vector<size_t>* rowids) {
+//		Column<unsigned int>* rid = (Column<unsigned int>*) this->columns->at(
+//				i);
+//		Column<unsigned int>* col = utils::get_column(columns, col_type, c);
+//		// row_ids of selection results
+//		col->lookup_rowid_master(length, input, rowids);
+//		cout << "length of rowids " << rowids -> size() << endl;
+//		// create map of dict_pos vs dict_actual_value
+//		pos_id tmp_dict;
+//		pos_id::left_const_iterator it;
+//		size_t index = 0;
+//		size_t row_id = -1;
+//		unsigned int value = 0U;
+//
+//		for(size_t i = 0; i < (*rowids).size(); i++){
+//			row_id = rowids->at(i);
+//			// index in dictionary
+//			index = rid->lookup_packed(row_id);
+//			// actual value
+//			row_dict[row_id] = index;
+//			it = tmp_dict.left.find(index);
+//			if (it == tmp_dict.left.end()) {
+//				value = *(*rid).getDictionary()->lookup(index);
+//				if(value != NULL){
+//					tmp_dict.insert(position(index, value));
+//				}
+//			}
+//		}
+//		return tmp_dict;
+//	}
+
 	string get_data_by_row(size_t j, int length = 20){
 		string tmp = "";
 		string tmp2 = "";
@@ -303,28 +344,28 @@ public:
 				case ColumnBase::uIntType: {
 					Column<unsigned int>* col =
 							(Column<unsigned int>*) this->columns->at(i);
-					tmp2 = to_string(*col->getDictionary()->lookup(col->getVecValue()->at(j)));
+					tmp2 = to_string(*col->getDictionary()->lookup(col->lookup_packed(j)));
 					pad_string(tmp2, length);
 					tmp.append(tmp2);
 					break;
 				}
 				case ColumnBase::intType: {
 					Column<int>* col = (Column<int>*) this->columns->at(i);
-					tmp2 = to_string(*col->getDictionary()->lookup(col->getVecValue()->at(j)));
+					tmp2 = to_string(*col->getDictionary()->lookup(col->lookup_packed(j)));
 					pad_string(tmp2, length);
 					tmp.append(tmp2);
 					break;
 				}
 				case ColumnBase::llType: {
 					Column<bigint>* col = (Column<bigint>*) this->columns->at(i);
-					tmp2 = to_string(*col->getDictionary()->lookup(col->getVecValue()->at(j)));
+					tmp2 = to_string(*col->getDictionary()->lookup(col->lookup_packed(j)));
 					pad_string(tmp2, length);
 					tmp.append(tmp2);
 					break;
 				}
 				default:
 					Column<string>* col = (Column<string>*) this->columns->at(i);
-					tmp2 = *col->getDictionary()-> lookup(col->getVecValue()->at(j));
+					tmp2 = *col->getDictionary()-> lookup(col->lookup_packed(j));
 					pad_string(tmp2, length);
 					tmp.append(tmp2);
 					break;
