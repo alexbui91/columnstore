@@ -277,6 +277,7 @@ public:
 		Column<unsigned int>* col = (Column<unsigned int>*) this->columns->at(
 				c);
 		// row_ids of selection results
+//		col->lookup_rowid(length, input, rowids);
 		col->lookup_rowid_master(length, input, rowids);
 //		cout << "length of rowids " << rowids -> size() << endl;
 		// create map of dict_pos vs dict_actual_value
@@ -393,7 +394,7 @@ public:
 //			Column<unsigned int>* col = (Column<unsigned int>*) base;
 //			cout << col->getName() << endl;
 //			for(size_t j = 0; j < length; j++){
-//				cout << col->getVecValue()->at(j) << endl;
+//				cout << col->lookup_packed(j) << endl;
 //			}
 			for(size_t j = 0; j < length; j++){
 				tmp = "|";
@@ -402,22 +403,22 @@ public:
 					case ColumnBase::uIntType: {
 						Column<unsigned int>* col =
 								(Column<unsigned int>*) this->columns->at(i);
-						tmp.append(to_string(col->getVecValue()->at(j))).append("|");
+						tmp.append(to_string(col->lookup_packed(j))).append("|");
 						break;
 					}
 					case ColumnBase::intType: {
 						Column<int>* col = (Column<int>*) this->columns->at(i);
-						tmp.append(to_string(col->getVecValue()->at(j))).append("|");
+						tmp.append(to_string(col->lookup_packed(j))).append("|");
 						break;
 					}
 					case ColumnBase::llType: {
 						Column<bigint>* col = (Column<bigint>*) this->columns->at(i);
-						tmp.append(to_string(col->getVecValue()->at(j))).append("|");
+						tmp.append(to_string(col->lookup_packed(j))).append("|");
 						break;
 					}
 					default:
 						Column<string>* col = (Column<string>*) this->columns->at(i);
-						tmp.append(to_string(col->getVecValue()->at(j))).append("|");
+						tmp.append(to_string(col->lookup_packed(j))).append("|");
 						break;
 					}
 				}

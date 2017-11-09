@@ -1,7 +1,7 @@
-Memory status at the starting point: 1.62891Mb
-Memory status after loading data: 321.91Mb
-Consumption amount: 320.281Mb
-Loading time: 19.9248s
+Memory status at the starting point: 1.69531Mb
+Memory status after loading data: 322.102Mb
+Consumption amount: 320.406Mb
+Loading time: 19.2386s
 execute query 1
 Query results: 
 ||Sq|sid                 ts                  x                   y                   z                   v                   a                   vx                  vy                  vz                  ax                  ay                  az                  
@@ -27,10 +27,18 @@ Query results:
 ||19|65                  10634738740592737   28258               -893                439                 53656               885053              5930                450                 8038                8042                5909                -626                |
 
 Total records avalable: 1048576
-Running time of query 1: 7.91622s
-Memory status after running query 1: 381.223Mb
-Consumption amount: 59.3125Mb
+Running time of query 1: 1.74715s
+Memory status after running query 1: 381.5Mb
+Consumption amount: 59.3984Mb
 execute query 2
+262144
+262144
+262144
+262144
+1010
+10
+
+12
 Query results: 
 ||Sq|sid                 ts                  x                   y                   z                   v                   a                   vx                  vy                  vz                  ax                  ay                  az                  
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -55,10 +63,19 @@ Query results:
 ||19|4                   10634853480406055   25564               -2541               304                 155743              11589365            9181                -3039               -2541               8549                -2971               -4251               |
 
 Total records avalable: 446885
-Running time of query 2: 6.63315s
-Memory status after running query 2: 466.664Mb
-Consumption amount: 85.4414Mb
+Running time of query 2: 0.486592s
+Memory status after running query 2: 467.16Mb
+Consumption amount: 85.6602Mb
 execute query 3
+1
+5
+5
+5
+6
+10
+10
+10
+12
 sensors rowid to its remaining actual value
 | A | B |
 0|4|
@@ -84,7 +101,8 @@ Query results:
 ||17|4                   10634860313031441   25565               -2542               314                 175220              11793893            -7590               2066                6173                -9513               2546                -1737               |
 ||18|4                   10634860801076331   25565               -2542               314                 209971              14202194            -7118               4895                5036                -8431               5170                -1474               |
 ||19|4                   10634861289121181   25565               -2541               315                 221249              14009009            -6170               5900                5206                -7548               6414                -1369               |
+
 Total records avalable: 138206
-Running time of query 3: 6.63106s
-Memory status after running query 3: 466.922Mb
+Running time of query 3: 0.461664s
+Memory status after running query 3: 467.418Mb
 Consumption amount: 0.257812Mb
