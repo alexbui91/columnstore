@@ -154,6 +154,7 @@ void Dictionary<T>::search(ColumnBase::OP_TYPE opType, vector<size_t>& result, T
 			break;
 		}
 		case ColumnBase::lt: {
+			// less than
 			// return positions from 0 to lower
 			for (size_t i = 0;
 					(lower == items->end()) ?
@@ -164,6 +165,7 @@ void Dictionary<T>::search(ColumnBase::OP_TYPE opType, vector<size_t>& result, T
 			break;
 		}
 		case ColumnBase::le: {
+			// less than and equal to
 			unsigned int position = -1;
 			if (lower == items->end()) {
 				// all are smaller than

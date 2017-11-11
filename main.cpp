@@ -130,17 +130,15 @@ void print_query_result(Table* table, map<size_t, size_t> e_row_dict, pos_id tra
 	size_t i = 0;
 	map<size_t, size_t>::iterator ita;
 	string tmp = "";
-	int size = 0;
 	string col_name = "";
-	int j = 0;
-	for(int c = 0; c < table->getColumns()->size(); c++){
+	for(size_t c = 0; c < table->getColumns()->size(); c++){
 		col_name = table->getColumns()->at(c)->getName();
 		table->pad_string(col_name, 20);
 		tmp.append(col_name);
 	}
 	cout << "||Sq|" << tmp << endl;
 	col_name = "";
-	for(j = 0; j < tmp.size(); j++){
+	for(size_t j = 0; j < tmp.size(); j++){
 		col_name.append("-");
 	}
 	cout << "-----" << col_name << endl;
@@ -153,7 +151,7 @@ void print_query_result(Table* table, map<size_t, size_t> e_row_dict, pos_id tra
 			col_name.clear();
 			// find row id in b
 			i++;
-			if(i < limit){
+			if(i < (size_t) limit){
 //				cout << "|" << i << "|" << (ita->first + 1) << "|" << endl;
 				col_name.append("||");
 				if(i >= 10){
@@ -212,6 +210,7 @@ vector<bool>* execute_select(Table* table, vector<Expr*>* list_expr){
 			} catch (exception& e) {
 				cerr << "Exception: " << e.what() << endl;
 			}
+			t->selection(searchValue, q_where_op, q_resultRid, initQueryResult);
 		}else{
 			Column<string>* t = (Column<string>*) colBase;
 			string searchValue = q_where_value;
@@ -220,6 +219,54 @@ vector<bool>* execute_select(Table* table, vector<Expr*>* list_expr){
 	}
 
 	return q_resultRid;
+}
+// execute update query
+void execute_update(Table* table, vector<Expr*>* list_expr, vector<hsql::UpdateClause*>* updates){
+	vector<bool>* q_resultRid = new vector<bool>();
+	string q_where_value;
+	Expr* e;
+	bool initQueryResult = false;
+	for (size_t i = 0; i < list_expr->size(); i++) {
+		e = list_expr->at(i);
+		ColumnBase::OP_TYPE q_where_op = e->getOp();
+		q_where_value = e->getVal();
+		// get column by name then cast to appropriate column based on column type
+		ColumnBase* colBase = table->getColumnByName(e->getField());
+		initQueryResult = (i == 0);
+		if (colBase == NULL) continue;
+		if(colBase->getType() == ColumnBase::COLUMN_TYPE::intType){
+			Column<int>* t = (Column<int>*) colBase;
+			int searchValue = 0;
+			try {
+				searchValue = stoi(q_where_value);
+			} catch (exception& e) {
+				cerr << "Exception: " << e.what() << endl;
+			}
+			t->selection(searchValue, q_where_op, q_resultRid, initQueryResult);
+		}else if(colBase->getType() == ColumnBase::COLUMN_TYPE::uIntType){
+			Column<unsigned int>* t = (Column<unsigned int>*) colBase;
+			unsigned int searchValue = 0U;
+			try {
+				searchValue = stoi(q_where_value);
+			} catch (exception& e) {
+				cerr << "Exception: " << e.what() << endl;
+			}
+			t->selection(searchValue, q_where_op, q_resultRid, initQueryResult);
+		}else if(colBase->getType() == ColumnBase::COLUMN_TYPE::llType){
+			Column<bigint>* t = (Column<bigint>*) colBase;
+			bigint searchValue = 0ll;
+			try {
+				searchValue = stoll(q_where_value);
+			} catch (exception& e) {
+				cerr << "Exception: " << e.what() << endl;
+			}
+			t->selection(searchValue, q_where_op, q_resultRid, initQueryResult);
+		}else{
+			Column<string>* t = (Column<string>*) colBase;
+			string searchValue = q_where_value;
+			t->selection(searchValue, q_where_op, q_resultRid, initQueryResult);
+		}
+	}
 }
 /* get total row of query result */
 size_t get_total_count(vector<bool>* q_resultRid){
@@ -249,18 +296,55 @@ Expr* add_reg_ops(hsql::Expr* expr){
 	hsql::ExprType literalType = expr->expr2->type;
 	if (literalType == hsql::ExprType::kExprLiteralInt)
 		val = to_string(expr->expr2->ival);
+	else if (literalType == hsql::ExprType::kExprLiteralFloat)
+		val = to_string(expr->expr2->fval);
 	else if (literalType == hsql::ExprType::kExprColumnRef)
 		val = expr->expr2->name;
 	Expr* aexpr = new Expr(val, ename, op);
 	return aexpr;
 }
-
+// add expression for set clause in update
+Expr* add_reg_ops(hsql::UpdateClause* s){
+	string col = s->column;
+	string val;
+	hsql::ExprType literalType = s->value->type;
+	if (literalType == hsql::ExprType::kExprLiteralInt)
+		val = to_string(s->value->ival);
+	else if (literalType == hsql::ExprType::kExprLiteralFloat)
+		val = to_string(s->value->fval);
+	else if (literalType == hsql::ExprType::kExprColumnRef)
+		val = s->value->name;
+	ColumnBase::OP_TYPE op = ColumnBase::none;
+	Expr* aexpr = new Expr(val, col, op);
+	return aexpr;
+}
+// get expression in where clause
+void get_where_expr(hsql::Expr* expr, vector<Expr*>* list_expr){
+	Expr* n_e;
+	if (expr->type == hsql::ExprType::kExprOperator) {
+		if (expr->opType == hsql::OperatorType::kOpAnd){
+			n_e = add_reg_ops(expr->expr);
+			list_expr->push_back(n_e);
+			if (expr->expr2 != nullptr) {
+				n_e = add_reg_ops(expr->expr2);
+				list_expr->push_back(n_e);
+			} else if (expr->exprList != nullptr) {
+				for (hsql::Expr* e : *expr->exprList) {
+					n_e = add_reg_ops(e);
+					list_expr->push_back(n_e);
+				}
+			}
+		} else{
+			n_e = add_reg_ops(expr);
+			list_expr->push_back(n_e);
+		}
+	}
+}
 // parse sql statement
-string parse_sql(const string &query, map<string, Table*>* list_tables, vector<string> &q_select_fields, vector<Expr*>* list_expr){
+string parse_sql(const string &query, map<string, Table*>* list_tables, vector<string> &q_select_fields, vector<Expr*>* list_expr, vector<Expr*>* updates){
 	string tname = "";
 	hsql::SQLParserResult result;
 	hsql::SQLParser::parse(query, &result);
-	Expr* n_e;
 	if (result.isValid() && result.size() > 0) {
 		const hsql::SQLStatement* statement = result.getStatement(0);
 		if (statement->isType(hsql::kStmtSelect)) {
@@ -268,7 +352,6 @@ string parse_sql(const string &query, map<string, Table*>* list_tables, vector<s
 			tname = select->fromTable->getName();
 			map<string, Table*>::iterator it;
 			it = list_tables->find(tname);
-			vector<bool>* q_resultRid = new vector<bool>();
 			if (it != list_tables->end()){
 				Table* table = it->second;
 				for (hsql::Expr* expr : *select->selectList) {
@@ -280,27 +363,30 @@ string parse_sql(const string &query, map<string, Table*>* list_tables, vector<s
 				}
 				if (select->whereClause != NULL) {
 					hsql::Expr* expr = select->whereClause;
-					if (expr->type == hsql::ExprType::kExprOperator) {
-						if (expr->opType == hsql::OperatorType::kOpAnd){
-							n_e = add_reg_ops(expr->expr);
-							list_expr->push_back(n_e);
-							if (expr->expr2 != nullptr) {
-								n_e = add_reg_ops(expr->expr2);
-								list_expr->push_back(n_e);
-							} else if (expr->exprList != nullptr) {
-								for (hsql::Expr* e : *expr->exprList) {
-									n_e = add_reg_ops(e);
-									list_expr->push_back(n_e);
-								}
-							}
-						} else{
-							n_e = add_reg_ops(expr);
-							list_expr->push_back(n_e);
-						}
-					}
+					get_where_expr(expr, list_expr);
 				}
 			}
-
+		}else if(statement->isType(hsql::kStmtUpdate)){
+			const hsql::UpdateStatement* select = (const hsql::UpdateStatement*) statement;
+			tname = select->table->name;
+			map<string, Table*>::iterator it;
+			it = list_tables->find(tname);
+			if (it != list_tables->end()){
+				// process where clause
+				if (select->where != NULL) {
+					hsql::Expr* expr = select->where;
+					get_where_expr(expr, list_expr);
+				}
+				// process set clause
+				Expr* n_e;
+				for(hsql::UpdateClause* s : *select->updates){
+					// in case update has expression, now not processed
+//					cout << s->value->opType;
+					// process simple ones
+					n_e = add_reg_ops(s);
+					updates->push_back(n_e);
+				}
+			}
 		}
 	}else {
 		fprintf(stderr, "%s (L%d:%d)\n", result.errorMsg(),
@@ -309,17 +395,30 @@ string parse_sql(const string &query, map<string, Table*>* list_tables, vector<s
 //	delete n_e;
 	return tname;
 }
+// parse for select
+string parse_sql(const string &query, map<string, Table*>* list_tables,vector<Expr*>* list_expr, vector<Expr*>* updates){
+	vector<string> q_select_fields;
+	return parse_sql(query, list_tables, q_select_fields, list_expr, updates);
+}
+// parse for update
+string parse_sql(const string &query, map<string, Table*>* list_tables, vector<string> &q_select_fields, vector<Expr*>* list_expr){
+	vector<Expr*>* updates = new vector<Expr*>();
+	string table = parse_sql(query, list_tables, q_select_fields, list_expr, updates);
+	delete updates;
+	return table;
+}
+
 int main(void) {
 	const string prefix = "/home/alex/Documents/database/assignment2/raw";
 //	string prefix = "/Users/alex/Documents/workspacecplus/columnstore/data";
-	clock_t t2;
-	t2 = clock();
 	float memory = getMemory();
 	cout << "Memory status at the starting point: " << memory << "Mb" << endl;
 
 	const string query1 = "SELECT * from events where events.sid = 40";
 	const string query2 = "SELECT * from events where events.v > 5000000";
 	const string query3 = "SELECT * from events where events.ts > 1000000000000000 and events.ts = 12100000000000000";
+	const string update1 = "UPDATE events SET sid = 1 WHERE sid = 40";
+	const string update2 = "UPDATE events SET sid = 40  WHERE events.v > 5000000";
 
 	string entity_path = prefix + "/sample-game.csv";
 	string sensors_path = prefix + "/sensors.csv";
@@ -337,24 +436,28 @@ int main(void) {
 			ColumnBase::intType, ColumnBase::intType, ColumnBase::intType };
 	map<string, Table*>* list_tables = new map<string, Table*>();
 	Table* events = new Table("events", &events_type, &events_name);
-	events->build_structure(entity_path);
+//	events->build_structure(entity_path);
 	list_tables->insert(pair<string, Table*>("events", events));
 	vector<Expr*>* list_expr = new vector<Expr*>();
 	vector<string> q_select_fields;
-	string table_name = parse_sql(query1, list_tables, q_select_fields, list_expr);
-	vector<bool>* q_result;
-	if(!table_name.empty()){
-		q_result = execute_select(events, list_expr);
-		cout << q_result->size() << endl;
-	}
-	list_expr->clear();
-	q_select_fields.clear();
-	table_name = parse_sql(query2, list_tables, q_select_fields, list_expr);
+//	string table_name = parse_sql(query1, list_tables, q_select_fields, list_expr);
+//	vector<bool>* q_result;
+//	if(!table_name.empty()){
+//		q_result = execute_select(events, list_expr);
+//		cout << q_result->size() << endl;
+//	}
+//	list_expr->clear();
+//	q_select_fields.clear();
+//	table_name = parse_sql(query2, list_tables, q_select_fields, list_expr);
 	// query 3
-	list_expr->clear();
-	q_select_fields.clear();
-	table_name = parse_sql(query3, list_tables, q_select_fields, list_expr);
+//	list_expr->clear();
+//	q_select_fields.clear();
+//	table_name = parse_sql(query3, list_tables, q_select_fields, list_expr);
 	// parse a given query
+
+	// parse update query
+	vector<Expr*>* updates = new vector<Expr*>();
+	string table_name = parse_sql(update1, list_tables, list_expr, updates);
 
 	return 0;
 }

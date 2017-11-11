@@ -8,7 +8,7 @@
 #ifndef EXPR_CPP_
 #define EXPR_CPP_
 
-#include "ColumnBase.h";
+#include "ColumnBase.h"
 
 using namespace std;
 

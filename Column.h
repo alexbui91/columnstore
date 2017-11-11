@@ -8,16 +8,24 @@
 #ifndef SRC_COLUMN_H_
 #define SRC_COLUMN_H_
 
-#include<iostream>
-#include<thread>
-#include<mutex>
-#include<chrono>
-
+#include <iostream>
+#include <vector>
+#include <thread>
+#include <mutex>
+#include <chrono>
+#include <map>
 #include "ColumnBase.h"
 #include "Dictionary.h"
 #include "PackedArray.h"
+#include "utils.h"
 
 namespace std {
+
+struct trans_row{
+	long csq;
+	size_t row_id;
+};
+
 template<typename T>
 class Column: public ColumnBase {
 private:
@@ -28,6 +36,12 @@ private:
 	PackedArray* packed;
 	// dictionary vector for column
 	Dictionary<T>* dictionary;
+	// versions space of each col is a map of
+	// row_id -> map_to_vx
+	// csn(tx) -> value
+	map<size_t, map<long, T>*> *versions;
+
+	vector<trans_row*>* working_transactions;
 
 	bool bulkInsert = false;
 
@@ -37,12 +51,16 @@ public:
 		vecValue = new vector<size_t>();
 		packed = new PackedArray();
 		lookup_result = new vector<size_t>();
+		versions = new map<size_t, map<long, T>*>();
+		working_transactions = new vector<trans_row*>();
 	}
 
 	virtual ~Column() {
 		delete vecValue;
 		delete dictionary;
 		delete lookup_result;
+		delete versions;
+		delete working_transactions;
 		PackedArray_destroy(packed);
 	}
 	vector<size_t>* getVecValue() {
@@ -290,11 +308,78 @@ public:
 		}
 	}
 
-	// look up real value from dictionary items: find in A (1, apple_in_a)
+	// implement versions space
+	// check if version already has key row_id
+	map<long, T>* is_version_exist(size_t row_id){
+		typename map<size_t, map<long, T>*>::iterator it;
+		it = versions->find(row_id);
+		if (it != versions->end()){
+			return it->second;
+		}
+		return NULL;
+	}
 
-	// look up position from real value from dictionary items: find in B (apple, 2_in_b)
+	// insert new version of rowid to space
+	void create_version(size_t& row_id, T& value){
+		long tx = utils::get_timestamp();
+		map<long, T>* s = is_version_exist(row_id);
+		if(s == NULL){
+			s = new map<long, T>();
+		}
+		s->insert(pair<long, T>(tx, value));
+	}
+	// scan for row id value with timestamp value
+	void scan_version(size_t& row_id, long& tx, T& value){
+		map<long, T>* s = is_version_exist(row_id);
+		typename map<size_t, map<long, T>*>::iterator it;
+		if(s != NULL){
+			trans_row* w = new trans_row();
+			w->csq = tx;
+			w->row_id = row_id;
+			working_transactions->push_back(w);
+			it = s->lower_bound(tx);
+			if(it != s->end()){
+				// value existed
+				T value = it->second;
+			}
+		}
+	}
 
-	// mapping in vecValue (row_id of B) with dict position of column A (pos_a, row_id_b)
+	// garbage collection
+	void collect_garbage(){
+		size_t sz = working_transactions->size();
+		trans_row* w;
+		if(sz == 1){
+			w = working_transactions->at(0);
+			collect_garbage(w->row_id, w->csq);
+			working_transactions->clear();
+		}else if(sz > 1){
+			for(size_t i = 0; i < sz; i++){
+				w = working_transactions->at(i);
+				collect_garbage(w->row_id, w->csq);
+			}
+			working_transactions->clear();
+		}
+
+	}
+	// record version outdated => remove
+	void collect_garbage(size_t row_id, long tx){
+		map<long, T>* s = is_version_exist(row_id);
+		typename map<size_t, map<long, T>*>::iterator it;
+		typename map<size_t, map<long, T>*>::iterator itc;
+		if(s != NULL){
+			it = s->lower_bound(tx);
+			s->erase(s->begin(), it);
+		}
+	}
+	// get latest version of row_id then update to data space
+	void update_latest_version(size_t row_id){
+		map<long, T>* s = is_version_exist(row_id);
+		if(s != NULL && s->size() != 0){
+			T value = s->end()->second;
+			PackedArray_set(packed, row_id, value);
+		}
+	}
 };
 
 }
