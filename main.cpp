@@ -5,6 +5,7 @@
 #include <ctime>
 
 #include <boost/bimap.hpp>
+#include <boost/algorithm/string.hpp>
 
 #include "sql/SQLParser.h"
 #include "sql/util/sqlhelper.h"
@@ -16,6 +17,7 @@
 #include "Column.h"
 #include "ColumnBase.h"
 #include "Expr.h"
+#include "server.h"
 
 using namespace std;
 
@@ -169,9 +171,7 @@ void print_query_result(Table* table, map<size_t, size_t> e_row_dict, pos_id tra
 	cout << "Total records avalable: " << i << endl;
 }
 
-// execute select query after parse
-
-vector<bool>* execute_select(Table* table, vector<Expr*>* list_expr){
+vector<bool>* execute_select(size_t& tx, Table* table, vector<Expr*>* list_expr){
 	vector<bool>* q_resultRid = new vector<bool>();
 	string q_where_value;
 	Expr* e;
@@ -192,7 +192,7 @@ vector<bool>* execute_select(Table* table, vector<Expr*>* list_expr){
 			} catch (exception& e) {
 				cerr << "Exception: " << e.what() << endl;
 			}
-			t->selection(searchValue, q_where_op, q_resultRid, initQueryResult);
+			t->selection(searchValue, q_where_op, q_resultRid, tx, initQueryResult);
 		}else if(colBase->getType() == ColumnBase::COLUMN_TYPE::uIntType){
 			Column<unsigned int>* t = (Column<unsigned int>*) colBase;
 			unsigned int searchValue = 0U;
@@ -201,7 +201,7 @@ vector<bool>* execute_select(Table* table, vector<Expr*>* list_expr){
 			} catch (exception& e) {
 				cerr << "Exception: " << e.what() << endl;
 			}
-			t->selection(searchValue, q_where_op, q_resultRid, initQueryResult);
+			t->selection(searchValue, q_where_op, q_resultRid, tx, initQueryResult);
 		}else if(colBase->getType() == ColumnBase::COLUMN_TYPE::llType){
 			Column<bigint>* t = (Column<bigint>*) colBase;
 			bigint searchValue = 0ll;
@@ -210,61 +210,92 @@ vector<bool>* execute_select(Table* table, vector<Expr*>* list_expr){
 			} catch (exception& e) {
 				cerr << "Exception: " << e.what() << endl;
 			}
-			t->selection(searchValue, q_where_op, q_resultRid, initQueryResult);
+			t->selection(searchValue, q_where_op, q_resultRid, tx, initQueryResult);
 		}else{
 			Column<string>* t = (Column<string>*) colBase;
 			string searchValue = q_where_value;
-			t->selection(searchValue, q_where_op, q_resultRid, initQueryResult);
+			t->selection(searchValue, q_where_op, q_resultRid, tx, initQueryResult);
 		}
 	}
 
 	return q_resultRid;
 }
+// execute select query after parse
+vector<bool>* execute_select(Table* table, vector<Expr*>* list_expr){
+	size_t tx = utils::get_timestamp();
+	return execute_select(tx, table, list_expr);
+}
 // execute update query
-void execute_update(Table* table, vector<Expr*>* list_expr, vector<hsql::UpdateClause*>* updates){
-	vector<bool>* q_resultRid = new vector<bool>();
-	string q_where_value;
-	Expr* e;
-	bool initQueryResult = false;
-	for (size_t i = 0; i < list_expr->size(); i++) {
-		e = list_expr->at(i);
-		ColumnBase::OP_TYPE q_where_op = e->getOp();
-		q_where_value = e->getVal();
-		// get column by name then cast to appropriate column based on column type
-		ColumnBase* colBase = table->getColumnByName(e->getField());
-		initQueryResult = (i == 0);
-		if (colBase == NULL) continue;
-		if(colBase->getType() == ColumnBase::COLUMN_TYPE::intType){
-			Column<int>* t = (Column<int>*) colBase;
-			int searchValue = 0;
-			try {
-				searchValue = stoi(q_where_value);
-			} catch (exception& e) {
-				cerr << "Exception: " << e.what() << endl;
+void execute_update(Table* table, vector<Expr*>* list_expr, vector<Expr*>* updates){
+	size_t tx = utils::get_timestamp();
+	vector<bool>* q_resultRid = execute_select(tx, table, list_expr);
+	size_t sz = q_resultRid->size();
+	cout << "Finish scan: " << sz << "records" << endl;
+	if(sz){
+		bool flag = false;
+		ColumnBase* colBase;
+		for(size_t i = 0; i < sz; i++){
+			flag = q_resultRid->at(i);
+			if(flag){
+				for(Expr* e : *updates){
+					colBase = table->getColumnByName(e->getField());
+					switch(colBase->getType()){
+					case ColumnBase::uIntType: {
+						Column<unsigned int>* t = (Column<unsigned int>*) colBase;
+						unsigned int value = stoi(e->getVal());
+						t->create_version(tx, i, value);
+						break;
+					}
+					case ColumnBase::intType: {
+						Column<int>* t = (Column<int>*) colBase;
+						int value = stoi(e->getVal());
+						t->create_version(tx, i, value);
+						break;
+					}
+					case ColumnBase::llType: {
+						Column<bigint>* t = (Column<bigint>*) colBase;
+						bigint value = stoll(e->getVal());
+						t->create_version(tx, i, value);
+						break;
+					}
+					default:
+						Column<string>* t = (Column<string>*) colBase;
+						string value = e->getVal();
+						t->create_version(tx, i, value);
+						break;
+					}
+				}
 			}
-			t->selection(searchValue, q_where_op, q_resultRid, initQueryResult);
-		}else if(colBase->getType() == ColumnBase::COLUMN_TYPE::uIntType){
-			Column<unsigned int>* t = (Column<unsigned int>*) colBase;
-			unsigned int searchValue = 0U;
-			try {
-				searchValue = stoi(q_where_value);
-			} catch (exception& e) {
-				cerr << "Exception: " << e.what() << endl;
+		}
+		// commit and garbage collection
+		for(size_t i = 0; i < sz; i++){
+			flag = q_resultRid->at(i);
+			if(flag){
+				for(Expr* e : *updates){
+					colBase = table->getColumnByName(e->getField());
+					switch(colBase->getType()){
+					case ColumnBase::uIntType: {
+						Column<unsigned int>* t = (Column<unsigned int>*) colBase;
+						t->collect_garbage(i);
+						break;
+					}
+					case ColumnBase::intType: {
+						Column<int>* t = (Column<int>*) colBase;
+						t->collect_garbage(i);
+						break;
+					}
+					case ColumnBase::llType: {
+						Column<bigint>* t = (Column<bigint>*) colBase;
+						t->collect_garbage(i);
+						break;
+					}
+					default:
+						Column<string>* t = (Column<string>*) colBase;
+						t->collect_garbage(i);
+						break;
+					}
+				}
 			}
-			t->selection(searchValue, q_where_op, q_resultRid, initQueryResult);
-		}else if(colBase->getType() == ColumnBase::COLUMN_TYPE::llType){
-			Column<bigint>* t = (Column<bigint>*) colBase;
-			bigint searchValue = 0ll;
-			try {
-				searchValue = stoll(q_where_value);
-			} catch (exception& e) {
-				cerr << "Exception: " << e.what() << endl;
-			}
-			t->selection(searchValue, q_where_op, q_resultRid, initQueryResult);
-		}else{
-			Column<string>* t = (Column<string>*) colBase;
-			string searchValue = q_where_value;
-			t->selection(searchValue, q_where_op, q_resultRid, initQueryResult);
 		}
 	}
 }
@@ -407,18 +438,33 @@ string parse_sql(const string &query, map<string, Table*>* list_tables, vector<s
 	delete updates;
 	return table;
 }
-
-int main(void) {
+void process_incomming_client(Server* server, int &inc, string &mes, Table *table, map<string, Table*>* list_tables){
+	string res = "Hi";
+	vector<string> q_select_fields;
+	vector<Expr*>* list_expr = new vector<Expr*>();
+	boost::algorithm::to_lower(mes);
+	string table_name;
+	if(utils::start_with(mes, "update")){
+		vector<Expr*>* updates = new vector<Expr*>();
+		table_name = parse_sql(mes, list_tables, list_expr, updates);
+		if(!table_name.empty()){
+			execute_update(table, list_expr, updates);
+		}
+	}else if(utils::start_with(mes, "select")){
+		table_name = parse_sql(mes, list_tables, q_select_fields, list_expr);
+		vector<bool>* q_result;
+		if(!table_name.empty()){
+			q_result = execute_select(table, list_expr);
+		}
+	}
+	server->sendMessage(inc, res.c_str());
+	server->closeConnection(inc);
+}
+int main(int argc, char *argv[]) {
 	const string prefix = "/home/alex/Documents/database/assignment2/raw";
 //	string prefix = "/Users/alex/Documents/workspacecplus/columnstore/data";
 	float memory = getMemory();
 	cout << "Memory status at the starting point: " << memory << "Mb" << endl;
-
-	const string query1 = "SELECT * from events where events.sid = 40";
-	const string query2 = "SELECT * from events where events.v > 5000000";
-	const string query3 = "SELECT * from events where events.ts > 1000000000000000 and events.ts = 12100000000000000";
-	const string update1 = "UPDATE events SET sid = 1 WHERE sid = 40";
-	const string update2 = "UPDATE events SET sid = 40  WHERE events.v > 5000000";
 
 	string entity_path = prefix + "/sample-game.csv";
 	string sensors_path = prefix + "/sensors.csv";
@@ -438,26 +484,32 @@ int main(void) {
 	Table* events = new Table("events", &events_type, &events_name);
 //	events->build_structure(entity_path);
 	list_tables->insert(pair<string, Table*>("events", events));
-	vector<Expr*>* list_expr = new vector<Expr*>();
-	vector<string> q_select_fields;
-//	string table_name = parse_sql(query1, list_tables, q_select_fields, list_expr);
-//	vector<bool>* q_result;
-//	if(!table_name.empty()){
-//		q_result = execute_select(events, list_expr);
-//		cout << q_result->size() << endl;
-//	}
-//	list_expr->clear();
-//	q_select_fields.clear();
-//	table_name = parse_sql(query2, list_tables, q_select_fields, list_expr);
-	// query 3
-//	list_expr->clear();
-//	q_select_fields.clear();
-//	table_name = parse_sql(query3, list_tables, q_select_fields, list_expr);
-	// parse a given query
-
-	// parse update query
-	vector<Expr*>* updates = new vector<Expr*>();
-	string table_name = parse_sql(update1, list_tables, list_expr, updates);
-
+	string table_name;
+	string mes;
+	int port = 80808;
+	if(argc > 1){
+		port = atoi(argv[1]);
+	}
+	cout << "Start server" << endl;
+	Server* server = new Server(port);
+	server->initServer();
+	int inc = 0;
+	char buffer[256];
+	int activity = 0;
+	while (true) {
+		//clear the socket set
+		server->clear_set();
+		server->check_valid_connection();
+		activity = server->wait_connection();
+		if ((activity < 0) && (errno!=EINTR)){
+			printf("select error");
+		}
+		if(server->is_valid_master()){
+			inc = server->openConnection(buffer);
+			string bu(buffer);
+			mes = bu;
+			process_incomming_client(server, inc, mes, events, list_tables);
+		}
+	}
 	return 0;
 }

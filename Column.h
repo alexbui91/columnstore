@@ -14,17 +14,13 @@
 #include <mutex>
 #include <chrono>
 #include <map>
+#include <set>
 #include "ColumnBase.h"
 #include "Dictionary.h"
 #include "PackedArray.h"
 #include "utils.h"
 
-namespace std {
-
-struct trans_row{
-	long csq;
-	size_t row_id;
-};
+using namespace std;
 
 template<typename T>
 class Column: public ColumnBase {
@@ -39,9 +35,9 @@ private:
 	// versions space of each col is a map of
 	// row_id -> map_to_vx
 	// csn(tx) -> value
-	map<size_t, map<long, T>*> *versions;
+	map<size_t, map<size_t, size_t>*> *versions;
 
-	vector<trans_row*>* working_transactions;
+	map<size_t, set<size_t>*>* working_transactions;
 
 	bool bulkInsert = false;
 
@@ -51,8 +47,8 @@ public:
 		vecValue = new vector<size_t>();
 		packed = new PackedArray();
 		lookup_result = new vector<size_t>();
-		versions = new map<size_t, map<long, T>*>();
-		working_transactions = new vector<trans_row*>();
+		versions = new map<size_t, map<size_t, size_t>*>();
+		working_transactions = new map<size_t, set<size_t>*>();
 	}
 
 	virtual ~Column() {
@@ -68,7 +64,7 @@ public:
 		if (vecValue == NULL) {
 			vecValue = new vector<size_t>();
 		}
-		if(packed->count){
+		if (packed->count) {
 			vecValue->clear();
 			for (int i = 0; i < packed->count; i++) {
 				vecValue->push_back(PackedArray_get(packed, i));
@@ -76,7 +72,7 @@ public:
 		}
 		return vecValue;
 	}
-	PackedArray* getPacked(){
+	PackedArray* getPacked() {
 		return packed;
 	}
 	Dictionary<T>* getDictionary() {
@@ -138,15 +134,23 @@ public:
 		// free space vecValue
 		vecValue->resize(0);
 	}
-
+	// selection with version space
 	bool selection(T& searchValue, ColumnBase::OP_TYPE q_where_op,
-						vector<bool>* q_resultRid, bool initQueryResult = false) {
+			vector<bool>* q_resultRid, size_t &tx, bool initQueryResult = false) {
 		vector<size_t> result;
 		this->getDictionary()->search(q_where_op, result, searchValue);
 		// find rowId with appropriate dictionary position
-		for (size_t rowId = 0; !result.empty() && rowId < packed->count; rowId++) {
-			size_t dictPosition = this->lookup_packed(rowId);
-			if ((ColumnBase::is_contain_op(q_where_op) && dictPosition >= result.front() && dictPosition <= result.back())) {
+		size_t dictPosition;
+		for (size_t rowId = 0; !result.empty() && rowId < packed->count;
+				rowId++) {
+			// before lookup dataspace, lookup in version space
+			dictPosition = scan_version(rowId, tx);
+			if (dictPosition == -1) {
+				dictPosition = this->lookup_packed(rowId);
+			}
+			if ((ColumnBase::is_contain_op(q_where_op)
+					&& dictPosition >= result.front()
+					&& dictPosition <= result.back())) {
 				// first where expr => used to init query result
 				if (initQueryResult)
 					q_resultRid->push_back(true); //rowId is in query result
@@ -155,10 +159,9 @@ public:
 						q_resultRid->at(rowId) = true;
 					}
 				}
-			}
-			else {
+			} else {
 				// rowId is not in query result
-				if(initQueryResult)
+				if (initQueryResult)
 					q_resultRid->push_back(false);
 				else
 					q_resultRid->at(rowId) = false;
@@ -167,46 +170,87 @@ public:
 		return true;
 	}
 
-	vector<T> projection(vector<bool>* q_resultRid, size_t limit, size_t& limitCount) {
+	bool selection(T& searchValue, ColumnBase::OP_TYPE q_where_op,
+			vector<bool>* q_resultRid, bool initQueryResult = false) {
+		vector<size_t> result;
+		this->getDictionary()->search(q_where_op, result, searchValue);
+		// find rowId with appropriate dictionary position
+		size_t dictPosition;
+		for (size_t rowId = 0; !result.empty() && rowId < packed->count;
+				rowId++) {
+			dictPosition = this->lookup_packed(rowId);
+			if ((ColumnBase::is_contain_op(q_where_op)
+					&& dictPosition >= result.front()
+					&& dictPosition <= result.back())) {
+				// first where expr => used to init query result
+				if (initQueryResult)
+					q_resultRid->push_back(true); //rowId is in query result
+				else {
+					if (!q_resultRid->at(rowId)) {
+						q_resultRid->at(rowId) = true;
+					}
+				}
+			} else {
+				// rowId is not in query result
+				if (initQueryResult)
+					q_resultRid->push_back(false);
+				else
+					q_resultRid->at(rowId) = false;
+			}
+		}
+		return true;
+	}
+
+	vector<T> projection(vector<bool>* q_resultRid, size_t limit,
+			size_t& limitCount) {
 		vector<T> outputs; // output result
 		limitCount = 0; // reset limit count
+		size_t encodeValue;
 		for (size_t rid = 0; rid < q_resultRid->size(); rid++) {
 			if (q_resultRid->at(rid)) {
-				size_t encodeValue = this->lookup_packed(rid);
+				encodeValue = this->lookup_packed(rid);
 				T* a = this->getDictionary()->lookup(encodeValue);
 				outputs.push_back(*a);
-				if (++limitCount >= limit) break;
+				if (++limitCount >= limit)
+					break;
 			}
 		}
 
 		return outputs;
 	}
 
-	vector<T> projection(vector<int>* q_resultRid, size_t limit, size_t& limitCount) {
+	vector<T> projection(vector<int>* q_resultRid, size_t limit,
+			size_t& limitCount) {
 		vector<T> outputs; // output result
 		limitCount = 0; // reset limit count
 		for (size_t i = 0; i < q_resultRid->size(); i++) {
 			size_t encodeValue = this->lookup_result(q_resultRid->at(i));
 			T* a = this->getDictionary()->lookup(encodeValue);
 			outputs.push_back(*a);
-			if (++limitCount >= limit) break;
+			if (++limitCount >= limit)
+				break;
 		}
 
 		return outputs;
 	}
 
 	// look up row_id that fits to condition_result
-	void lookup_rowid(size_t length, vector<size_t>& lookup_result, vector<size_t> *rowids) {
+	void lookup_rowid(size_t length, vector<size_t>& lookup_result,
+			vector<size_t> *rowids) {
 		size_t pos = -1;
 //		clock_t t1;
-		for(size_t i = 0; i < length; i++){
+		for (size_t i = 0; i < length; i++) {
 //			t1 = clock();
 			pos = lookup_packed(i);
-			if(this->getDictionary()->getIsSorted()){
-				if(pos != -1 && binary_search(lookup_result.begin(), lookup_result.end(), pos)){
+			if (this->getDictionary()->getIsSorted()) {
+				if (pos != -1
+						&& binary_search(lookup_result.begin(),
+								lookup_result.end(), pos)) {
 					rowids->push_back(i);
 				}
-			}else if(pos != -1 && find(lookup_result.begin(), lookup_result.end(), pos) != lookup_result.end()){
+			} else if (pos != -1
+					&& find(lookup_result.begin(), lookup_result.end(), pos)
+							!= lookup_result.end()) {
 				rowids->push_back(i);
 			}
 //			cout << "one step cost: " << (float) clock() - (float) t1 << endl;
@@ -214,9 +258,9 @@ public:
 		}
 	}
 
-
 	// try master and slave
-	void lookup_rowid_master(size_t length, vector<size_t>& lookup_result, vector<size_t> *rowids) {
+	void lookup_rowid_master(size_t length, vector<size_t>& lookup_result,
+			vector<size_t> *rowids) {
 		int no_of_slave = 4;
 		mutex mtx;
 		size_t length_of_slave = length / no_of_slave;
@@ -228,37 +272,45 @@ public:
 		vector<size_t> pos1;
 		from = 0;
 		to = length_of_slave;
-		for(int i = from; i < to; i++){
+		for (int i = from; i < to; i++) {
 			pos1.push_back(this->lookup_packed(i));
 		}
 		vector<size_t> tmp_id1;
-		list_thread.push_back(thread(&Column<T>::lookup_rowid_slave, ref(mtx), ref(pos1), isSorted, ref(lookup_result), ref(tmp_id1), from, to));
+		list_thread.push_back(
+				thread(&Column<T>::lookup_rowid_slave, ref(mtx), ref(pos1),
+						isSorted, ref(lookup_result), ref(tmp_id1), from, to));
 		from = to;
 		to = length_of_slave + from;
 		vector<size_t> pos2;
-		for(int i = from; i < to; i++){
-		    pos2.push_back(this->lookup_packed(i));
+		for (int i = from; i < to; i++) {
+			pos2.push_back(this->lookup_packed(i));
 		}
 		vector<size_t> tmp_id2;
-		list_thread.push_back(thread(&Column<T>::lookup_rowid_slave, ref(mtx), ref(pos2), isSorted, ref(lookup_result), ref(tmp_id2), from, to));
+		list_thread.push_back(
+				thread(&Column<T>::lookup_rowid_slave, ref(mtx), ref(pos2),
+						isSorted, ref(lookup_result), ref(tmp_id2), from, to));
 		from = to;
 		to = length_of_slave + from;
 		vector<size_t> pos3;
-		for(int i = from; i < to; i++){
-		    pos3.push_back(this->lookup_packed(i));
+		for (int i = from; i < to; i++) {
+			pos3.push_back(this->lookup_packed(i));
 		}
 		vector<size_t> tmp_id3;
 		vector<size_t> pos4;
-		list_thread.push_back(thread(&Column<T>::lookup_rowid_slave, ref(mtx), ref(pos3), isSorted, ref(lookup_result), ref(tmp_id3), from, to));
+		list_thread.push_back(
+				thread(&Column<T>::lookup_rowid_slave, ref(mtx), ref(pos3),
+						isSorted, ref(lookup_result), ref(tmp_id3), from, to));
 		from = to;
 		to = length;
-		for(int i = from; i < to; i++){
-		    pos4.push_back(this->lookup_packed(i));
+		for (int i = from; i < to; i++) {
+			pos4.push_back(this->lookup_packed(i));
 		}
 		vector<size_t> tmp_id4;
-		list_thread.push_back(thread(&Column<T>::lookup_rowid_slave, ref(mtx), ref(pos4), isSorted, ref(lookup_result), ref(tmp_id4), from, to));
+		list_thread.push_back(
+				thread(&Column<T>::lookup_rowid_slave, ref(mtx), ref(pos4),
+						isSorted, ref(lookup_result), ref(tmp_id4), from, to));
 
-		for(int i = 0; i < no_of_slave; i++){
+		for (int i = 0; i < no_of_slave; i++) {
 			list_thread.at(i).join();
 		}
 //		cout << "l: " << tmp_id1.size() << "||" << tmp_id2.size() << "||" << tmp_id3.size() << "||" << tmp_id4.size() << "||" << endl;
@@ -268,22 +320,28 @@ public:
 		rowids->insert(rowids->end(), tmp_id4.begin(), tmp_id4.end());
 	}
 
-	static void lookup_rowid_slave(mutex& mtx, vector<size_t>& pos, bool isSorted, vector<size_t>& lookup_result, vector<size_t> &rowids, size_t from, size_t to){
+	static void lookup_rowid_slave(mutex& mtx, vector<size_t>& pos,
+			bool isSorted, vector<size_t>& lookup_result,
+			vector<size_t> &rowids, size_t from, size_t to) {
 		bool flag = false;
 		size_t p = -1;
 		cout << pos.size() << endl;
 		size_t length = to - from;
-		for(size_t i = 0; i < length; i++){
+		for (size_t i = 0; i < length; i++) {
 			p = pos.at(i);
 			flag = false;
-			if(isSorted){
-				if(p != -1 && binary_search(lookup_result.begin(), lookup_result.end(), p)){
+			if (isSorted) {
+				if (p != -1
+						&& binary_search(lookup_result.begin(),
+								lookup_result.end(), p)) {
 					flag = true;
 				}
-			}else if(p != -1 && find(lookup_result.begin(), lookup_result.end(), p) != lookup_result.end()){
+			} else if (p != -1
+					&& find(lookup_result.begin(), lookup_result.end(), p)
+							!= lookup_result.end()) {
 				flag = true;
 			}
-			if(flag){
+			if (flag) {
 				mtx.lock();
 				rowids.push_back(from + i);
 				mtx.unlock();
@@ -294,9 +352,9 @@ public:
 	// return -1 in case of missing
 	size_t lookup_packed(size_t i) {
 		size_t pos = -1;
-		if(packed->count){
+		if (packed->count) {
 			pos = PackedArray_get(packed, i);
-		}else{
+		} else {
 			pos = this->vecValue->at(i);
 		}
 		return pos;
@@ -310,78 +368,126 @@ public:
 
 	// implement versions space
 	// check if version already has key row_id
-	map<long, T>* is_version_exist(size_t row_id){
-		typename map<size_t, map<long, T>*>::iterator it;
+	map<size_t, size_t>* is_version_exist(size_t row_id) {
+		map<size_t, map<size_t, size_t>*>::iterator it;
 		it = versions->find(row_id);
-		if (it != versions->end()){
+		if (it != versions->end()) {
 			return it->second;
 		}
 		return NULL;
 	}
 
 	// insert new version of rowid to space
-	void create_version(size_t& row_id, T& value){
-		long tx = utils::get_timestamp();
-		map<long, T>* s = is_version_exist(row_id);
-		if(s == NULL){
-			s = new map<long, T>();
+	void create_version(size_t& tx, size_t& row_id, T& value) {
+		vector<size_t> results;
+		this->getDictionary()->search(ColumnBase::OP_TYPE::equal, results, value);
+		if (results.size()) {
+			size_t dict_position = results.at(0);
+			create_version(tx, row_id, dict_position);
 		}
-		s->insert(pair<long, T>(tx, value));
+	}
+	// insert new version of rowid with dict_position to space
+	void create_version(size_t& tx, size_t& row_id, size_t& dict_position) {
+		map<size_t, size_t>* s = is_version_exist(row_id);
+		if (s == NULL) {
+			s = new map<size_t, size_t>();
+		}
+		s->insert(pair<size_t, size_t>(tx, dict_position));
+	}
+
+	// implement versions space
+	// check if version already has key row_id
+	set<size_t>* is_transaction_working(size_t row_id) {
+		map<size_t, set<size_t>*>::iterator it;
+		it = working_transactions->find(row_id);
+		if (it != working_transactions->end()) {
+			return it->second;
+		}
+		return NULL;
 	}
 	// scan for row id value with timestamp value
-	void scan_version(size_t& row_id, long& tx, T& value){
-		map<long, T>* s = is_version_exist(row_id);
-		typename map<size_t, map<long, T>*>::iterator it;
-		if(s != NULL){
-			trans_row* w = new trans_row();
-			w->csq = tx;
-			w->row_id = row_id;
-			working_transactions->push_back(w);
+	size_t scan_version(size_t& row_id, size_t& tx) {
+		size_t value = -1;
+		map<size_t, size_t>* s = is_version_exist(row_id);
+		map<size_t, size_t>::iterator it;
+		if (s != NULL) {
 			it = s->lower_bound(tx);
-			if(it != s->end()){
+			if (it != s->end()) {
+				// add to working transaction on current row_id of version control
+				set<size_t>* trans = is_transaction_working(row_id);
+				if (trans == NULL) {
+					trans = new set<size_t>();
+					trans->insert(tx);
+					working_transactions->insert(
+							pair<size_t, set<size_t>*>(row_id, trans));
+				} else {
+					auto i = trans->find(tx);
+					if (i == trans->end()) {
+						trans->insert(tx);
+					}
+				}
 				// value existed
-				T value = it->second;
+				value = it->second;
 			}
 		}
+		return value;
 	}
 
 	// garbage collection
-	void collect_garbage(){
-		size_t sz = working_transactions->size();
-		trans_row* w;
-		if(sz == 1){
-			w = working_transactions->at(0);
-			collect_garbage(w->row_id, w->csq);
-			working_transactions->clear();
-		}else if(sz > 1){
-			for(size_t i = 0; i < sz; i++){
-				w = working_transactions->at(i);
-				collect_garbage(w->row_id, w->csq);
+	void collect_garbage() {
+//		size_t sz = working_transactions->size();
+//		trans_row* w;
+//		if(sz == 1){
+//			w = working_transactions->at(0);
+//			collect_garbage(w->row_id, w->csq);
+//			working_transactions->clear();
+//		}else if(sz > 1){
+//			for(size_t i = 0; i < sz; i++){
+//				w = working_transactions->at(i);
+//				collect_garbage(w->row_id, w->csq);
+//			}
+//			working_transactions->clear();
+//		}
+	}
+	// record version outdated => remove
+	void collect_garbage(size_t row_id) {
+		set<size_t>* trans = is_transaction_working(row_id);
+		if (trans != NULL) {
+			if (!trans->size()) {
+				working_transactions->erase(row_id);
+			} else {
+				set<size_t>::iterator iter = trans->find(0);
+				if (iter != trans->end()) {
+					size_t min_tx = *iter;
+					// find tx in working transaction of row_id
+					map<size_t, size_t>* s = is_version_exist(row_id);
+					update_latest_version(row_id, s);
+					map<size_t, size_t>::iterator it;
+					if (s != NULL) {
+						it = s->lower_bound(min_tx);
+						s->erase(s->begin(), it);
+					}
+				}
 			}
-			working_transactions->clear();
+			cout << "Finish garbage collection of " << row_id;
 		}
 
 	}
-	// record version outdated => remove
-	void collect_garbage(size_t row_id, long tx){
-		map<long, T>* s = is_version_exist(row_id);
-		typename map<size_t, map<long, T>*>::iterator it;
-		typename map<size_t, map<long, T>*>::iterator itc;
-		if(s != NULL){
-			it = s->lower_bound(tx);
-			s->erase(s->begin(), it);
+	// get latest version of row_id then update to data space
+	void update_latest_version(size_t row_id) {
+		map<size_t, size_t>* s = is_version_exist(row_id);
+		if (s != NULL && s->size() != 0) {
+			update_latest_version(row_id, s);
 		}
 	}
-	// get latest version of row_id then update to data space
-	void update_latest_version(size_t row_id){
-		map<long, T>* s = is_version_exist(row_id);
-		if(s != NULL && s->size() != 0){
-			T value = s->end()->second;
+	void update_latest_version(size_t row_id, map<size_t, size_t>* vs) {
+		map<size_t, size_t>::reverse_iterator it;
+		it = vs->rbegin();
+		if (it != vs->rend()) {
+			size_t value = it->second;
 			PackedArray_set(packed, row_id, value);
 		}
 	}
 };
-
-}
 
 #endif /* SRC_COLUMN_H_ */

@@ -5,9 +5,6 @@
  *      Author: alexbui
  */
 
-#include "Column.h"
 
-namespace std{
-}
 
 
