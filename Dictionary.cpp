@@ -118,6 +118,7 @@ size_t Dictionary<T>::addItem(T& value, vector<size_t>* vecValue, bool sorted, b
 
 template<class T>
 void Dictionary<T>::search(ColumnBase::OP_TYPE opType, vector<size_t>& result, T& value) {
+//	cout << items->size() << endl;;
 	if (items->empty()) {
 		// result is empty
 		result.push_back(-1);
@@ -131,6 +132,7 @@ void Dictionary<T>::search(ColumnBase::OP_TYPE opType, vector<size_t>& result, T
 		// based on operator to find exact position in dictionary
 		switch (opType) {
 		case ColumnBase::equal: {
+			size_t sz = items->size();
 			if (lower != items->end() && equal(*lower, value)) {
 				// return position in dictionary
 				result.push_back(lower - items->begin());

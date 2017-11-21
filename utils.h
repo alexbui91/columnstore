@@ -43,6 +43,21 @@ inline size_t get_timestamp() {
 inline bool start_with(string &s, string pat){
 	return s.find(pat) == 0;
 }
+
+inline void print(string mes){
+	cout << mes << endl;
+}
+
+template <class ReverseIterator>
+typename ReverseIterator::iterator_type make_forward(ReverseIterator rit)
+{
+    return --(rit.base()); // move result of .base() back by one.
+    // alternatively
+    // return (++rit).base() ;
+    // or
+    // return (rit+1).base().
+}
+
 }
 ;
 #endif /* UTILS_H_ */

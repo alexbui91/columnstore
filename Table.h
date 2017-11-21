@@ -70,6 +70,9 @@ public:
 	void setName(string &nameValue) {
 		name = nameValue;
 	}
+	size_t getLength(){
+		return length;
+	}
 	ColumnBase* getColumnByName(string colName) {
 		//int tupleSize = tuple_size<decltype(columns)>::value;;
 		for (size_t i = 0; i < columns->size(); i++) {
@@ -192,7 +195,11 @@ public:
 					}
 					default:
 						Column<string>* col = (Column<string>*) col_b;
-						utils::removeCharsFromString(temp_col, "\"");
+						string c = "\"";
+//						const char *c_ = c.c_str();
+						char *c_c = new char[c.size()+1];
+						std::strcpy(c_c, c.c_str());
+						utils::removeCharsFromString(temp_col, c_c);
 						col->updateDictionary(temp_col);
 						break;
 					}
@@ -246,7 +253,7 @@ public:
 //		rowids = new vector<size_t>();
 		size_t index = -1;
 		// first dimension translation table
-		unsigned int value = 0U;
+		long value = 0l;
 		pos_id tmp_dict;
 		pos_id::left_const_iterator it;
 		for(size_t i = 0; i < this->length; i++){
@@ -258,7 +265,7 @@ public:
 			it = tmp_dict.left.find(index);
 			if (it == tmp_dict.left.end()) {
 				value = *(*rid).getDictionary()->lookup(index);
-				if(value != NULL){
+				if(value != -1){
 					tmp_dict.insert(position(index, value));
 				}
 			}
@@ -285,7 +292,7 @@ public:
 		pos_id::left_const_iterator it;
 		size_t index = 0;
 		size_t row_id = -1;
-		unsigned int value = 0U;
+		long value = 0l;
 		for(size_t i = 0; i < (*rowids).size(); i++){
 			row_id = rowids->at(i);
 			// index in dictionary
@@ -295,7 +302,7 @@ public:
 			it = tmp_dict.left.find(index);
 			if (it == tmp_dict.left.end()) {
 				value = *(*rid).getDictionary()->lookup(index);
-				if(value != NULL){
+				if(value != -1){
 					tmp_dict.insert(position(index, value));
 				}
 			}
@@ -366,6 +373,59 @@ public:
 				default:
 					Column<string>* col = (Column<string>*) this->columns->at(i);
 					tmp2 = *col->getDictionary()-> lookup(col->lookup_packed(j));
+					pad_string(tmp2, length);
+					tmp.append(tmp2);
+					break;
+				}
+			}
+		}
+		return tmp;
+	}
+	string get_data_by_row(size_t j, size_t& tx, int length = 20){
+		string tmp = "";
+		string tmp2 = "";
+		long dict = 0;
+		if (this->is_table_exist()) {
+			tmp.append("|");
+			for(size_t i = 0; i < this->columns->size(); i++){
+				switch (col_type->at(i)) {
+				case ColumnBase::uIntType: {
+					Column<unsigned int>* col =
+							(Column<unsigned int>*) this->columns->at(i);
+					dict = col->scan_version(tx, j);
+					if(dict == -1)
+						dict = col->lookup_packed(j);
+					tmp2 = to_string(*col->getDictionary()->lookup(dict));
+					pad_string(tmp2, length);
+					tmp.append(tmp2);
+					break;
+				}
+				case ColumnBase::intType: {
+					Column<int>* col = (Column<int>*) this->columns->at(i);
+					dict = col->scan_version(tx, j);
+					if(dict == -1)
+						dict = col->lookup_packed(j);
+					tmp2 = to_string(*col->getDictionary()->lookup(dict));
+					pad_string(tmp2, length);
+					tmp.append(tmp2);
+					break;
+				}
+				case ColumnBase::llType: {
+					Column<bigint>* col = (Column<bigint>*) this->columns->at(i);
+					dict = col->scan_version(tx, j);
+					if(dict == -1)
+						dict = col->lookup_packed(j);
+					tmp2 = to_string(*col->getDictionary()->lookup(dict));
+					pad_string(tmp2, length);
+					tmp.append(tmp2);
+					break;
+				}
+				default:
+					Column<string>* col = (Column<string>*) this->columns->at(i);
+					dict = col->scan_version(tx, j);
+					if(dict == -1)
+						dict = col->lookup_packed(j);
+					tmp2 = *col->getDictionary()->lookup(dict);
 					pad_string(tmp2, length);
 					tmp.append(tmp2);
 					break;

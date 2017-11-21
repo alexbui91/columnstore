@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <thread>
 #include <algorithm>
 #include <ctime>
 
@@ -27,6 +28,13 @@ typedef boost::bimap<size_t, unsigned int> pos_id;
 typedef boost::bimap<size_t, size_t> map_idx_idx;
 typedef pos_id::value_type position;
 typedef map_idx_idx::value_type idx2pos;
+
+const string prefix = "/home/alex/Documents/database/assignment2/raw";
+//	string prefix = "/Users/alex/Documents/workspacecplus/columnstore/data";
+
+const int garbage_interval = 10;
+const bool debug = false;
+const bool res_full = true;
 
 template<class T>
 bool contain(vector<T> &vec, T &item) {
@@ -171,7 +179,96 @@ void print_query_result(Table* table, map<size_t, size_t> e_row_dict, pos_id tra
 	cout << "Total records avalable: " << i << endl;
 }
 
-vector<bool>* execute_select(size_t& tx, Table* table, vector<Expr*>* list_expr){
+// deactivate transaction
+void collect_garbage(size_t& tx, Table *table, vector<bool>* q_resultRid, vector<Expr*>* updates){
+//	int fl = 0;
+//	int total_effect = 0;
+	int flag = false;
+	size_t sz = q_resultRid->size();
+	ColumnBase* colBase;
+	for(size_t i = 0; i < sz; i++){
+		flag = q_resultRid->at(i);
+		if(flag){
+			for(Expr* e : *updates){
+				colBase = table->getColumnByName(e->getField());
+				switch(colBase->getType()){
+				case ColumnBase::uIntType: {
+					Column<unsigned int>* t = (Column<unsigned int>*) colBase;
+//					fl = t->collect_garbage(i);
+					t->deactivate_transaction(tx, i);
+					break;
+				}
+				case ColumnBase::intType: {
+					Column<int>* t = (Column<int>*) colBase;
+//					fl = t->collect_garbage(i);
+					t->deactivate_transaction(tx, i);
+					break;
+				}
+				case ColumnBase::llType: {
+					Column<bigint>* t = (Column<bigint>*) colBase;
+//					fl = t->collect_garbage(i);
+					t->deactivate_transaction(tx, i);
+					break;
+				}
+				default:
+					Column<string>* t = (Column<string>*) colBase;
+//					fl = t->collect_garbage(i);
+					t->deactivate_transaction(tx, i);
+					break;
+				}
+			}
+//			total_effect += fl;
+		}
+	}
+//	if(total_effect)
+//		cout << total_effect << " versions have been collected" << endl;
+}
+string projection(Table* table, size_t& tx){
+	size_t limit_count = 0;
+	size_t limit = 20;
+	string tmp = "";
+	string col_name = "";
+	for(size_t i = 0; i < table->getLength(); i++){
+		col_name.append("||");
+		if(limit_count >= 9){
+			col_name.append(to_string(limit_count + 1));
+		}else{
+			col_name.append(to_string(limit_count + 1).append(" "));
+		}
+		col_name += table->get_data_by_row(i, tx) + "|\n";
+		limit_count++;
+		if(limit_count >= limit)
+			break;
+	}
+	tmp += col_name;
+	return tmp;
+}
+string projection(Table* table, size_t& tx, vector<bool>* q_resultRid){
+	bool flag = false;
+	size_t limit_count = 0;
+	size_t limit = 20;
+	string tmp = "";
+	string col_name = "";
+	for(size_t i = 0; i < q_resultRid->size(); i++){
+		flag = q_resultRid->at(i);
+		if(flag){
+			col_name.append("||");
+			if(limit_count >= 9){
+				col_name.append(to_string(limit_count + 1));
+			}else{
+				col_name.append(to_string(limit_count + 1).append(" "));
+			}
+			col_name += table->get_data_by_row(i, tx) + "|\n";
+			limit_count++;
+			if(limit_count >= limit)
+				break;
+		}
+	}
+	tmp += col_name;
+	return tmp;
+}
+
+vector<bool>* execute_select(size_t& tx, Table* table, vector<Expr*>* list_expr, bool res=true){
 	vector<bool>* q_resultRid = new vector<bool>();
 	string q_where_value;
 	Expr* e;
@@ -217,26 +314,33 @@ vector<bool>* execute_select(size_t& tx, Table* table, vector<Expr*>* list_expr)
 			t->selection(searchValue, q_where_op, q_resultRid, tx, initQueryResult);
 		}
 	}
-
+	if(res){
+		collect_garbage(tx, table, q_resultRid, list_expr);
+	}
 	return q_resultRid;
 }
 // execute select query after parse
-vector<bool>* execute_select(Table* table, vector<Expr*>* list_expr){
+vector<bool>* execute_select(Table* table, vector<Expr*>* list_expr, bool res=true){
 	size_t tx = utils::get_timestamp();
-	return execute_select(tx, table, list_expr);
+	return execute_select(tx, table, list_expr, res);
 }
 // execute update query
-void execute_update(Table* table, vector<Expr*>* list_expr, vector<Expr*>* updates){
+long execute_update(Table* table, vector<Expr*>* list_expr, vector<Expr*>* updates){
+//	ColumnBase* colBase = table->getColumnByName("sid");
+//	Column<unsigned int>* t = (Column<unsigned int>*) colBase;
+//	cout << t->getDictionary()->getItems()->size() << endl;
 	size_t tx = utils::get_timestamp();
-	vector<bool>* q_resultRid = execute_select(tx, table, list_expr);
+	vector<bool>* q_resultRid = execute_select(tx, table, list_expr, false);
 	size_t sz = q_resultRid->size();
-	cout << "Finish scan: " << sz << "records" << endl;
+//	cout << "Finish scan: " << sz << " records" << endl;
+	size_t total_effect = 0;
 	if(sz){
 		bool flag = false;
 		ColumnBase* colBase;
 		for(size_t i = 0; i < sz; i++){
 			flag = q_resultRid->at(i);
 			if(flag){
+				total_effect++;
 				for(Expr* e : *updates){
 					colBase = table->getColumnByName(e->getField());
 					switch(colBase->getType()){
@@ -267,37 +371,12 @@ void execute_update(Table* table, vector<Expr*>* list_expr, vector<Expr*>* updat
 				}
 			}
 		}
+		if(total_effect)
+			utils::print(to_string(total_effect) + " versions are created");
 		// commit and garbage collection
-		for(size_t i = 0; i < sz; i++){
-			flag = q_resultRid->at(i);
-			if(flag){
-				for(Expr* e : *updates){
-					colBase = table->getColumnByName(e->getField());
-					switch(colBase->getType()){
-					case ColumnBase::uIntType: {
-						Column<unsigned int>* t = (Column<unsigned int>*) colBase;
-						t->collect_garbage(i);
-						break;
-					}
-					case ColumnBase::intType: {
-						Column<int>* t = (Column<int>*) colBase;
-						t->collect_garbage(i);
-						break;
-					}
-					case ColumnBase::llType: {
-						Column<bigint>* t = (Column<bigint>*) colBase;
-						t->collect_garbage(i);
-						break;
-					}
-					default:
-						Column<string>* t = (Column<string>*) colBase;
-						t->collect_garbage(i);
-						break;
-					}
-				}
-			}
-		}
+		collect_garbage(tx, table, q_resultRid, updates);
 	}
+	return total_effect;
 }
 /* get total row of query result */
 size_t get_total_count(vector<bool>* q_resultRid){
@@ -419,11 +498,7 @@ string parse_sql(const string &query, map<string, Table*>* list_tables, vector<s
 				}
 			}
 		}
-	}else {
-		fprintf(stderr, "%s (L%d:%d)\n", result.errorMsg(),
-				result.errorLine(), result.errorColumn());
 	}
-//	delete n_e;
 	return tname;
 }
 // parse for select
@@ -438,78 +513,172 @@ string parse_sql(const string &query, map<string, Table*>* list_tables, vector<s
 	delete updates;
 	return table;
 }
+/*
+ * get total records of query select
+ * */
+long get_total_result(vector<bool>* results){
+	size_t total = 0;
+	for(size_t i = 0; i < results->size(); i++){
+		if(results->at(i)){
+			total++;
+		}
+	}
+	return total;
+}
 void process_incomming_client(Server* server, int &inc, string &mes, Table *table, map<string, Table*>* list_tables){
-	string res = "Hi";
+	string res = "";
 	vector<string> q_select_fields;
 	vector<Expr*>* list_expr = new vector<Expr*>();
 	boost::algorithm::to_lower(mes);
 	string table_name;
+	long total = 0;
 	if(utils::start_with(mes, "update")){
 		vector<Expr*>* updates = new vector<Expr*>();
 		table_name = parse_sql(mes, list_tables, list_expr, updates);
 		if(!table_name.empty()){
-			execute_update(table, list_expr, updates);
+			utils::print("Execute query: " + mes);
+			total = execute_update(table, list_expr, updates);
+			res = to_string(total) + " records are updated";
+		}else{
+			res = "There are errors syntax in your query";
 		}
 	}else if(utils::start_with(mes, "select")){
 		table_name = parse_sql(mes, list_tables, q_select_fields, list_expr);
-		vector<bool>* q_result;
 		if(!table_name.empty()){
-			q_result = execute_select(table, list_expr);
+			utils::print("Execute query: " + mes);
+			size_t tx = utils::get_timestamp();
+			if(list_expr->empty()){
+				res = projection(table, tx);
+//				cout << res << endl;
+				res += to_string(table->getLength()) + " records are found";
+			}else{
+				vector<bool>* q_result = execute_select(tx, table, list_expr);
+				total = get_total_result(q_result);
+				res = projection(table, tx, q_result);
+				res += to_string(total) + " records are found";
+			}
+		}else{
+			res = "There are errors syntax in your query";
 		}
 	}
-	server->sendMessage(inc, res.c_str());
-	server->closeConnection(inc);
+	delete list_expr;
+	if(!debug){
+		server->sendMessage(inc, res.c_str());
+		server->closeConnection(inc);
+	}
+}
+void update_table_space(Table* table){
+	try{
+		clock_t t1 = clock();
+		int t = 0;
+		string mes;
+		long total = 0;
+		while(true){
+			t = (static_cast<int>(((float) clock() - (float) t1) / CLOCKS_PER_SEC)) / garbage_interval;
+			if(t == 1){
+				total = 0;
+				t1 = clock();
+				for(ColumnBase* colBase : *table->getColumns()){
+					switch(colBase->getType()){
+					case ColumnBase::uIntType: {
+						Column<unsigned int>* t = (Column<unsigned int>*) colBase;
+						total = t->update_latest_version();
+						break;
+					}
+					case ColumnBase::intType: {
+						Column<int>* t = (Column<int>*) colBase;
+						total = t->update_latest_version();
+						break;
+					}
+					case ColumnBase::llType: {
+						Column<bigint>* t = (Column<bigint>*) colBase;
+						total = t->update_latest_version();
+						break;
+					}
+					default:
+						Column<string>* t = (Column<string>*) colBase;
+						total = t->update_latest_version();
+						break;
+					}
+					if(total)
+						utils::print(to_string(total) + " versions have been collected");
+				}
+			}
+		}
+	}catch(exception& e){
+		cerr << "Exception in garbage collection: " << e.what() << endl;
+	}
+
+}
+void start_server(int port, Table* table, map<string, Table*>* list_tables){
+	utils::print("Start server");
+	Server* server = new Server(port);
+	if(!debug)
+		server->initServer();
+	int inc = 0;
+	try{
+		if(debug){
+			string mes = "UPDATE events SET sid = 62 WHERE sid = 40";
+			string mes2 = "select * from events";
+			process_incomming_client(server, inc, mes, table, list_tables);
+			process_incomming_client(server, inc, mes2, table, list_tables);
+		}
+		else{
+			string mes = "";
+			char buffer[256];
+			int activity = 0;
+			while (true) {
+				//clear the socket set
+				server->clear_set();
+				server->add_connection(server->get_master_socket());
+				server->check_valid_connection();
+				activity = server->wait_connection();
+				if ((activity < 0) && (errno!=EINTR)){
+					printf("select error");
+				}
+				if(server->is_valid_master()){
+					inc = server->openConnection(buffer);
+					string bu(buffer);
+					mes = bu;
+					process_incomming_client(server, inc, mes, table, list_tables);
+				}
+			}
+		}
+	}catch(exception& e){
+		server->closeServer();
+		cerr << "Exception in server runtime: " << e.what() << endl;
+	}
 }
 int main(int argc, char *argv[]) {
-	const string prefix = "/home/alex/Documents/database/assignment2/raw";
-//	string prefix = "/Users/alex/Documents/workspacecplus/columnstore/data";
+	int port = 8888;
+	if(argc > 1){
+		port = atoi(argv[1]);
+	}
 	float memory = getMemory();
-	cout << "Memory status at the starting point: " << memory << "Mb" << endl;
-
-	string entity_path = prefix + "/sample-game.csv";
+	utils::print("Memory status at the starting point: " + to_string(memory) + "Mb");
+	string entity_path;
+	if(!debug)
+		entity_path = prefix + "/sample-game.csv";
+	else
+		entity_path = prefix + "/test.csv";
 	string sensors_path = prefix + "/sensors.csv";
 	string entities_path = prefix + "/entities.csv";
-
-	// init column name
-	vector<string> events_name = { "sid", "ts", "x", "y", "z", "v", "a", "vx",
-			"vy", "vz", "ax", "ay", "az" };
-
-	// init colummn type
 	vector<ColumnBase::COLUMN_TYPE> events_type = { ColumnBase::uIntType,
 			ColumnBase::llType, ColumnBase::intType, ColumnBase::intType,
 			ColumnBase::intType, ColumnBase::uIntType, ColumnBase::uIntType,
 			ColumnBase::intType, ColumnBase::intType, ColumnBase::intType,
 			ColumnBase::intType, ColumnBase::intType, ColumnBase::intType };
+	vector<string> events_name = { "sid", "ts", "x", "y", "z", "v", "a", "vx",
+			"vy", "vz", "ax", "ay", "az" };
 	map<string, Table*>* list_tables = new map<string, Table*>();
 	Table* events = new Table("events", &events_type, &events_name);
-//	events->build_structure(entity_path);
+	events->build_structure(entity_path);
+	utils::print("Load done");
 	list_tables->insert(pair<string, Table*>("events", events));
-	string table_name;
-	string mes;
-	int port = 80808;
-	if(argc > 1){
-		port = atoi(argv[1]);
-	}
-	cout << "Start server" << endl;
-	Server* server = new Server(port);
-	server->initServer();
-	int inc = 0;
-	char buffer[256];
-	int activity = 0;
-	while (true) {
-		//clear the socket set
-		server->clear_set();
-		server->check_valid_connection();
-		activity = server->wait_connection();
-		if ((activity < 0) && (errno!=EINTR)){
-			printf("select error");
-		}
-		if(server->is_valid_master()){
-			inc = server->openConnection(buffer);
-			string bu(buffer);
-			mes = bu;
-			process_incomming_client(server, inc, mes, events, list_tables);
-		}
-	}
+	thread server = thread(start_server, ref(port), ref(events), ref(list_tables));
+	thread garbage = thread(update_table_space, ref(events));
+	server.join();
+	garbage.join();
+
 	return 0;
 }

@@ -50,13 +50,17 @@ public:
 		exit(1);
 	}
 	void initServer() {
-		struct sockaddr_in serv_addr, cli_addr;
+		int opt = 1;
+		struct sockaddr_in serv_addr;
 		// open socket
 		master_socket = socket(AF_INET, SOCK_STREAM, 0);
 		if (master_socket < 0)
 			error("ERROR opening socket");
-
-		bzero((char *) &serv_addr, sizeof(serv_addr));
+		//set master socket to allow multiple connections , this is just a good habit, it will work without this
+		if( setsockopt(master_socket, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(opt)) < 0 ){
+			perror("setsockopt");
+			exit(EXIT_FAILURE);
+		}
 		serv_addr.sin_family = AF_INET;
 		serv_addr.sin_addr.s_addr = INADDR_ANY;
 		serv_addr.sin_port = htons(port);
@@ -81,8 +85,9 @@ public:
 	}
 	void check_valid_connection() {
 		//add child sockets to set
+		max_sd = master_socket;
 		int sd;
-		for (int i = 0; i < client_socket->size(); i++) {
+		for (size_t i = 0; i < client_socket->size(); i++) {
 			//socket descriptor
 			sd = client_socket->at(i);
 			//if valid socket descriptor then add to read list

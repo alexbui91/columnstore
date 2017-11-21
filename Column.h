@@ -35,9 +35,9 @@ private:
 	// versions space of each col is a map of
 	// row_id -> map_to_vx
 	// csn(tx) -> value
-	map<size_t, map<size_t, size_t>*> *versions;
+	map<long, map<size_t, long>*> *versions;
 
-	map<size_t, set<size_t>*>* working_transactions;
+	map<long, set<size_t>*>* working_transactions;
 
 	bool bulkInsert = false;
 
@@ -47,8 +47,8 @@ public:
 		vecValue = new vector<size_t>();
 		packed = new PackedArray();
 		lookup_result = new vector<size_t>();
-		versions = new map<size_t, map<size_t, size_t>*>();
-		working_transactions = new map<size_t, set<size_t>*>();
+		versions = new map<long, map<size_t, long>*>();
+		working_transactions = new map<long, set<size_t>*>();
 	}
 
 	virtual ~Column() {
@@ -66,7 +66,7 @@ public:
 		}
 		if (packed->count) {
 			vecValue->clear();
-			for (int i = 0; i < packed->count; i++) {
+			for (size_t i = 0; i < packed->count; i++) {
 				vecValue->push_back(PackedArray_get(packed, i));
 			}
 		}
@@ -81,12 +81,14 @@ public:
 		}
 		return dictionary;
 	}
+//	size_t get_total_versions(){
+//
+//	}
 	void updateDictionary(T& value, bool sorted = false,
 			bool bulkInsert = true) {
 		this->bulkInsert = bulkInsert;
 		dictionary->addItem(value, vecValue, sorted, bulkInsert);
 	}
-
 	//  re-order vecValue after building entire dictionary using bulk insert
 	void rebuildVecValue() {
 		if (this->bulkInsert) {
@@ -102,7 +104,7 @@ public:
 					vector<size_t> result;
 					dictionary->search(ColumnBase::equal, result,
 							bulkVecValue->at(i));
-					size_t pos = result[0];
+					long pos = result[0];
 					if (pos != -1)
 						vecValue->push_back(pos);
 				}
@@ -140,7 +142,7 @@ public:
 		vector<size_t> result;
 		this->getDictionary()->search(q_where_op, result, searchValue);
 		// find rowId with appropriate dictionary position
-		size_t dictPosition;
+		long dictPosition;
 		for (size_t rowId = 0; !result.empty() && rowId < packed->count;
 				rowId++) {
 			// before lookup dataspace, lookup in version space
@@ -149,8 +151,8 @@ public:
 				dictPosition = this->lookup_packed(rowId);
 			}
 			if ((ColumnBase::is_contain_op(q_where_op)
-					&& dictPosition >= result.front()
-					&& dictPosition <= result.back())) {
+					&& (size_t)dictPosition >= result.front()
+					&& (size_t)dictPosition <= result.back())) {
 				// first where expr => used to init query result
 				if (initQueryResult)
 					q_resultRid->push_back(true); //rowId is in query result
@@ -272,7 +274,7 @@ public:
 		vector<size_t> pos1;
 		from = 0;
 		to = length_of_slave;
-		for (int i = from; i < to; i++) {
+		for (size_t i = from; i < to; i++) {
 			pos1.push_back(this->lookup_packed(i));
 		}
 		vector<size_t> tmp_id1;
@@ -282,7 +284,7 @@ public:
 		from = to;
 		to = length_of_slave + from;
 		vector<size_t> pos2;
-		for (int i = from; i < to; i++) {
+		for (size_t i = from; i < to; i++) {
 			pos2.push_back(this->lookup_packed(i));
 		}
 		vector<size_t> tmp_id2;
@@ -292,7 +294,7 @@ public:
 		from = to;
 		to = length_of_slave + from;
 		vector<size_t> pos3;
-		for (int i = from; i < to; i++) {
+		for (size_t i = from; i < to; i++) {
 			pos3.push_back(this->lookup_packed(i));
 		}
 		vector<size_t> tmp_id3;
@@ -302,7 +304,7 @@ public:
 						isSorted, ref(lookup_result), ref(tmp_id3), from, to));
 		from = to;
 		to = length;
-		for (int i = from; i < to; i++) {
+		for (size_t i = from; i < to; i++) {
 			pos4.push_back(this->lookup_packed(i));
 		}
 		vector<size_t> tmp_id4;
@@ -324,7 +326,7 @@ public:
 			bool isSorted, vector<size_t>& lookup_result,
 			vector<size_t> &rowids, size_t from, size_t to) {
 		bool flag = false;
-		size_t p = -1;
+		long p = -1;
 		cout << pos.size() << endl;
 		size_t length = to - from;
 		for (size_t i = 0; i < length; i++) {
@@ -368,125 +370,210 @@ public:
 
 	// implement versions space
 	// check if version already has key row_id
-	map<size_t, size_t>* is_version_exist(size_t row_id) {
-		map<size_t, map<size_t, size_t>*>::iterator it;
-		it = versions->find(row_id);
-		if (it != versions->end()) {
-			return it->second;
+	map<size_t, long>* is_version_exist(size_t row_id) {
+		try{
+			map<long, map<size_t, long>*>::iterator it;
+			it = versions->find(row_id);
+			if (it != versions->end()) {
+				return it->second;
+			}
+		}catch (exception& e) {
+			cerr << "Error during check version of row: " << row_id << " Exception: " << e.what() << endl;
 		}
 		return NULL;
 	}
 
-	// insert new version of rowid to space
+	// insert new version of rowid to spaceb
 	void create_version(size_t& tx, size_t& row_id, T& value) {
 		vector<size_t> results;
+//		cout << "col: " << this->getName() << this->getDictionary()->getItems()->size() << endl;
 		this->getDictionary()->search(ColumnBase::OP_TYPE::equal, results, value);
 		if (results.size()) {
 			size_t dict_position = results.at(0);
-			create_version(tx, row_id, dict_position);
+			if((long)dict_position != -1){
+				create_version(tx, row_id, dict_position);
+			}else{
+//				cout << value << " not in dictionary of" << this->getName();
+			}
 		}
 	}
 	// insert new version of rowid with dict_position to space
 	void create_version(size_t& tx, size_t& row_id, size_t& dict_position) {
-		map<size_t, size_t>* s = is_version_exist(row_id);
-		if (s == NULL) {
-			s = new map<size_t, size_t>();
+		try{
+			map<size_t, long>* s = is_version_exist(row_id);
+			if (s == NULL) {
+				s = new map<size_t, long>();
+				s->insert(pair<size_t, long>(tx, dict_position));
+				versions->insert(pair<long, map<size_t, long>*>(row_id, s));
+			}else{
+				s->insert(pair<size_t, long>(tx, dict_position));
+			}
+		}catch (exception& e) {
+			cerr << "Error during create version of row: " << row_id << " and dict_pos: " << dict_position << " - Exception: " << e.what() << endl;
 		}
-		s->insert(pair<size_t, size_t>(tx, dict_position));
 	}
 
 	// implement versions space
 	// check if version already has key row_id
 	set<size_t>* is_transaction_working(size_t row_id) {
-		map<size_t, set<size_t>*>::iterator it;
-		it = working_transactions->find(row_id);
-		if (it != working_transactions->end()) {
-			return it->second;
+		try{
+			map<long, set<size_t>*>::iterator it;
+			it = working_transactions->find(row_id);
+			if (it != working_transactions->end()) {
+				return it->second;
+			}
+		}catch (exception& e) {
+			cerr << "Error during validate transaction, Exception: " << e.what() << endl;
 		}
 		return NULL;
 	}
+	T lookup_dictionary(size_t& tx, size_t row_id){
+		size_t dict = scan_version(row_id, tx);
+		T* a = this->getDictionary()->lookup(dict);
+		return *a;
+	}
 	// scan for row id value with timestamp value
-	size_t scan_version(size_t& row_id, size_t& tx) {
-		size_t value = -1;
-		map<size_t, size_t>* s = is_version_exist(row_id);
-		map<size_t, size_t>::iterator it;
+	long scan_version(size_t& row_id, size_t& tx) {
+		long value = -1;
+		map<size_t, long>* s = is_version_exist(row_id);
+		map<size_t, long>::iterator it;
 		if (s != NULL) {
-			it = s->lower_bound(tx);
-			if (it != s->end()) {
+//			it = (*s).lower_bound(tx);
+			// upper_bound: find first element that larger than tx
+			// given is the previous one of this element
+			// if iterator pointer is at the first position mean nothing found
+			it = s->upper_bound(tx);
+			if (it != s->begin()) {
+				it = prev(it, 1);
+				value = it->second;
 				// add to working transaction on current row_id of version control
 				set<size_t>* trans = is_transaction_working(row_id);
 				if (trans == NULL) {
 					trans = new set<size_t>();
 					trans->insert(tx);
 					working_transactions->insert(
-							pair<size_t, set<size_t>*>(row_id, trans));
+							pair<long, set<size_t>*>(row_id, trans));
 				} else {
 					auto i = trans->find(tx);
 					if (i == trans->end()) {
 						trans->insert(tx);
 					}
 				}
-				// value existed
-				value = it->second;
 			}
 		}
 		return value;
 	}
 
-	// garbage collection
-	void collect_garbage() {
-//		size_t sz = working_transactions->size();
-//		trans_row* w;
-//		if(sz == 1){
-//			w = working_transactions->at(0);
-//			collect_garbage(w->row_id, w->csq);
-//			working_transactions->clear();
-//		}else if(sz > 1){
-//			for(size_t i = 0; i < sz; i++){
-//				w = working_transactions->at(i);
-//				collect_garbage(w->row_id, w->csq);
-//			}
-//			working_transactions->clear();
-//		}
-	}
 	// record version outdated => remove
-	void collect_garbage(size_t row_id) {
+	int collect_garbage(size_t row_id) {
+		int flag = 0;
 		set<size_t>* trans = is_transaction_working(row_id);
-		if (trans != NULL) {
-			if (!trans->size()) {
-				working_transactions->erase(row_id);
-			} else {
-				set<size_t>::iterator iter = trans->find(0);
-				if (iter != trans->end()) {
-					size_t min_tx = *iter;
-					// find tx in working transaction of row_id
-					map<size_t, size_t>* s = is_version_exist(row_id);
-					update_latest_version(row_id, s);
-					map<size_t, size_t>::iterator it;
+		map<size_t, long>* s = is_version_exist(row_id);
+		map<size_t, long>::iterator it;
+		try{
+			if (trans != NULL) {
+				if (trans->empty()) {
+					working_transactions->erase(row_id);
 					if (s != NULL) {
-						it = s->lower_bound(min_tx);
-						s->erase(s->begin(), it);
+						flag += s->size();
+						versions->erase(row_id);
+					}
+				} else {
+					set<size_t>::iterator iter = trans->begin();
+					if (iter != trans->end()) {
+						size_t pos = distance(trans->begin(), iter);
+						size_t min_tx = *iter;
+						// find tx in working transaction of row_id
+						if (s != NULL) {
+							it = s->upper_bound(min_tx);
+							if(it != s->begin()){
+								s->erase(s->begin(), it);
+								flag = pos + 1;
+							}
+						}
 					}
 				}
+			}else{
+				if (s != NULL) {
+					flag += s->size();
+					versions->erase(row_id);
+				}
 			}
-			cout << "Finish garbage collection of " << row_id;
+		}catch(exception& e){
+			cerr <<  "Error during collect garbage transaction, Exception: " << e.what() << endl;
+		}
+		return flag;
+	}
+	// remove transation working from row_id map
+	void deactivate_transaction(size_t tx, size_t row_id){
+		set<size_t>* trans = is_transaction_working(row_id);
+		if(trans != NULL){
+			try{
+			if (trans->empty()) {
+				working_transactions->erase(row_id);
+			}else{
+				set<size_t>::iterator it;
+				it = trans->find(tx);
+				if(it != trans->end()){
+					trans->erase(it);
+				}
+			}}catch(exception& e){
+				cerr <<  "Error during exit transaction, Exception: " << e.what() << endl;
+			}
 		}
 
 	}
+
+	// calling update all latest versions
+	// may used annually
+	long update_latest_version() {
+		long total = 0;
+		size_t row_id;
+		if(!versions->empty()){
+			map<long, map<size_t, long>*>::iterator it;
+			map<size_t, long>* rows;
+			for(it = versions->begin(); it != versions->end(); it++){
+				rows = it->second;
+				row_id = it->first;
+				if (!rows->empty()) {
+					update_latest_version(row_id, rows);
+					total += collect_garbage(row_id);
+				}
+			}
+		}
+//		cout << "FFFFFF" << total << endl;
+		return total;
+	}
 	// get latest version of row_id then update to data space
 	void update_latest_version(size_t row_id) {
-		map<size_t, size_t>* s = is_version_exist(row_id);
-		if (s != NULL && s->size() != 0) {
+		map<size_t, long>* s = is_version_exist(row_id);
+		if (s != NULL && !s->empty()) {
 			update_latest_version(row_id, s);
 		}
 	}
-	void update_latest_version(size_t row_id, map<size_t, size_t>* vs) {
-		map<size_t, size_t>::reverse_iterator it;
-		it = vs->rbegin();
-		if (it != vs->rend()) {
-			size_t value = it->second;
-			PackedArray_set(packed, row_id, value);
+	void update_latest_version(size_t row_id, map<size_t, long>* vs) {
+		map<size_t, long>::reverse_iterator it;
+		long value = -1;
+		try{
+			if(!vs->empty()){
+				it = vs->rbegin();
+				if (it != vs->rend()) {
+					value = it->second;
+					if(value != -1){
+						PackedArray_set(packed, row_id, value);
+					}else{
+//						cout << "FFF " << value << endl;
+					}
+				}
+			}
+		}catch(exception& e){
+			string mes = "Error during update table space " + to_string(row_id) + "|";
+			if(value != -1){
+				mes += to_string(value);
+			}
+			cerr <<  mes << ", Exception: " << e.what() << endl;
 		}
+
 	}
 };
 
